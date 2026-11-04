@@ -1,0 +1,13 @@
+{
+  "name": "LoveYourTemple",
+  "short_name": "Temple",
+  "description": "Daily push-ups, workouts, food and body measurements in one place.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#2a78d6",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

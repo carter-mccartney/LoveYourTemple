@@ -1,0 +1,14 @@
+node_modules
+dist
+.env.local
+.env.*.local
+*.log
+.DS_Store
+# Local Claude Code tooling (dev-server launcher pointing at this machine's build folder)
+.claude/
+# Personal workout history stays out of a public repo; regenerate with scripts/import_excel.py
+src/data/excel-history.json
+scripts/personal-settings.json
+# Never commit keys (VAPID private key, webhook secret, USDA key, Supabase service key)
+*secrets*
+supabase/.temp/

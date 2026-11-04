@@ -1,0 +1,308 @@
+import { useState } from "react";
+import type { Toast } from "../../App";
+import type { Data } from "../../lib/useData";
+import type { Settings } from "../../lib/types";
+import { WEEKDAY_NAMES, dayKey } from "../../lib/dates";
+import { csvToSets, download, setsToCsv } from "../../lib/csv";
+import { supabase } from "../../lib/supabase";
+import { getUsdaKey, setUsdaKey } from "../../lib/nutrition";
+
+type AnyRow = Record<string, unknown> & { id?: string };
+const noId = ({ id: _id, ...r }: AnyRow) => r;
+
+export function SettingsView({ data, email, onImportExcel, toast }: { data: Data; email?: string; onImportExcel?: () => Promise<void>; toast: (t: Toast) => void }) {
+  const [s, setS] = useState<Settings>(data.settings);
+  const [newEx, setNewEx] = useState("");
+  const dirty = JSON.stringify(s) !== JSON.stringify(data.settings);
+  const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS((p) => ({ ...p, [k]: v }));
+  const setN = <K extends keyof Settings["nutrition"]>(k: K, v: string) => setS((p) => ({ ...p, nutrition: { ...p.nutrition, [k]: v === "" ? null : Number(v) } }));
+  const mode = data.mode;
+
+  /** Restore a backup. IDs are re-issued, so links (set → workout, entry → food) are remapped. */
+  async function restore(backup: Record<string, AnyRow[] | undefined> & { settings?: Partial<Settings> }) {
+    const workoutIds = new Map<string, string>();
+    const foodIds = new Map<string, string>();
+    const ws = backup.workouts ?? [];
+    const addedW = (await data.insert("workouts", ws.map(noId) as never)) ?? [];
+    ws.forEach((w, i) => w.id && addedW[i] && workoutIds.set(w.id, addedW[i].id));
+    const fs = backup.foods ?? [];
+    const addedF = (await data.insert("foods", fs.map(noId) as never)) ?? [];
+    fs.forEach((f, i) => f.id && addedF[i] && foodIds.set(f.id, addedF[i].id));
+    const sets = (backup.sets ?? []).map((r) => ({ ...noId(r), workout_id: r.workout_id ? workoutIds.get(r.workout_id as string) ?? null : null }));
+    const logs = (backup.food_logs ?? []).map((r) => ({ ...noId(r), food_id: r.food_id ? foodIds.get(r.food_id as string) ?? null : null }));
+    await data.insert("sets", sets as never);
+    await data.insert("food_logs", logs as never);
+    await data.insert("goals", (backup.goals ?? []).map(noId) as never);
+    if (backup.settings) await data.saveSettings({ ...data.settings, ...backup.settings });
+    toast({ msg: `Restored ${sets.length} sets, ${ws.length} workouts, ${logs.length} food entries` });
+  }
+
+  async function importFile(file: File) {
+    const text = await file.text();
+    try {
+      if (file.name.endsWith(".json")) await restore(JSON.parse(text));
+      else {
+        const sets = csvToSets(text);
+        await data.insert("sets", sets);
+        toast({ msg: `Imported ${sets.length} sets` });
+      }
+    } catch (e) {
+      toast({ msg: `Import failed: ${(e as Error).message}` });
+    }
+  }
+
+  return (
+    <div className="stack">
+      <h1>Settings</h1>
+      <section className="card">
+        <h2>Account & sync</h2>
+        {mode === "local" ? (
+          <p>
+            Saved <strong>in this browser only</strong>. Back up with “Export JSON” below. Once cloud sync (Supabase) is connected you'll sign in,
+            your data syncs between phone and desktop, and you can share with a crew.
+          </p>
+        ) : (
+          <div className="row">
+            <p className="grow">
+              Signed in as <strong>{email}</strong>.
+            </p>
+            <button className="btn" onClick={() => supabase?.auth.signOut()}>Sign out</button>
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Profile</h2>
+        <div className="row wrap">
+          <label className="field grow">
+            <span>Your name (what your crew sees)</span>
+            <input className="input" value={s.displayName} onChange={(e) => set("displayName", e.target.value)} placeholder="Carter" />
+          </label>
+          <label className="field">
+            <span>Body weight ({s.units === "metric" ? "kg" : "lb"})</span>
+            <input
+              className="input"
+              type="number"
+              inputMode="decimal"
+              value={s.bodyweightLb == null ? "" : s.units === "metric" ? Math.round(s.bodyweightLb / 2.20462) : s.bodyweightLb}
+              onChange={(e) => set("bodyweightLb", e.target.value === "" ? null : s.units === "metric" ? Number(e.target.value) * 2.20462 : Number(e.target.value))}
+            />
+          </label>
+          <label className="field">
+            <span>Units</span>
+            <select className="input" value={s.units} onChange={(e) => set("units", e.target.value as Settings["units"])}>
+              <option value="imperial">lb, miles, mph</option>
+              <option value="metric">kg, km, km/h</option>
+            </select>
+          </label>
+        </div>
+        <p className="hint">Body weight is used for calorie estimates and the bodyweight-volume estimate on push-ups and pull-ups.</p>
+      </section>
+
+      <section className="card">
+        <h2>Daily push-ups</h2>
+        <div className="row wrap">
+          <label className="field">
+            <span>Workday start</span>
+            <input className="input" type="time" value={s.workStart} onChange={(e) => set("workStart", e.target.value)} />
+          </label>
+          <label className="field">
+            <span>End</span>
+            <input className="input" type="time" value={s.workEnd} onChange={(e) => set("workEnd", e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Minutes between sets</span>
+            <input className="input" type="number" min={1} value={s.intervalMin} onChange={(e) => set("intervalMin", Number(e.target.value))} />
+          </label>
+          <label className="field">
+            <span>Default reps</span>
+            <input className="input" type="number" min={1} value={s.defaultReps} onChange={(e) => set("defaultReps", Number(e.target.value))} />
+          </label>
+        </div>
+        <div className="chips">
+          {WEEKDAY_NAMES.map((n, i) => {
+            const on = s.workdays.includes(i);
+            return (
+              <button key={n} className={`chip ${on ? "on" : ""}`} aria-pressed={on} onClick={() => set("workdays", on ? s.workdays.filter((d) => d !== i) : [...s.workdays, i].sort())}>
+                {n.slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label className="check block">
+            <input type="checkbox" checked={s.autoTimer} onChange={(e) => set("autoTimer", e.target.checked)} /> Start a {s.intervalMin}-minute rest timer
+            after each daily set
+          </label>
+          <label className="check block">
+            <input type="checkbox" checked={s.timerWorkHoursOnly} onChange={(e) => set("timerWorkHoursOnly", e.target.checked)} disabled={!s.autoTimer} /> Only
+            during work hours on workdays
+          </label>
+        </div>
+        <table className="table" style={{ marginTop: 12 }}>
+          <thead>
+            <tr>
+              <th>Exercise</th>
+              <th className="num">Daily target</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {s.exercises.map((ex) => (
+              <tr key={ex}>
+                <td>
+                  <label className="radio">
+                    <input type="radio" name="default-ex" checked={s.defaultExercise === ex} onChange={() => set("defaultExercise", ex)} />
+                    {ex}
+                  </label>
+                </td>
+                <td className="num">
+                  <input
+                    className="input small"
+                    type="number"
+                    min={0}
+                    placeholder="–"
+                    value={s.dailyTargets[ex] ?? ""}
+                    onChange={(e) => {
+                      const t = { ...s.dailyTargets };
+                      if (e.target.value) t[ex] = Number(e.target.value);
+                      else delete t[ex];
+                      set("dailyTargets", t);
+                    }}
+                  />
+                </td>
+                <td className="num">
+                  <button className="link" disabled={ex === s.defaultExercise} onClick={() => set("exercises", s.exercises.filter((x) => x !== ex))}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="hint">The selected circle is the default daily exercise. Workout sets of an exercise with a daily target count toward that day.</p>
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const n = newEx.trim();
+            if (n && !s.exercises.includes(n)) set("exercises", [...s.exercises, n]);
+            setNewEx("");
+          }}
+        >
+          <input className="input grow" placeholder="Add an exercise" value={newEx} onChange={(e) => setNewEx(e.target.value)} />
+          <button className="btn">Add</button>
+        </form>
+      </section>
+
+      <section className="card">
+        <h2>Nutrition goals</h2>
+        <div className="form-grid">
+          {(
+            [
+              ["proteinMin", "Protein, at least (g)"],
+              ["kcal", "Calories target"],
+              ["addedSugarMax", "Added sugar, at most (g)"],
+              ["sugarMax", "Total sugar, at most (g)"],
+              ["carbsMax", "Carbs, at most (g)"],
+            ] as const
+          ).map(([k, label]) => (
+            <label key={k} className="field">
+              <span>{label}</span>
+              <input className="input" type="number" min={0} placeholder="none" value={s.nutrition[k] ?? ""} onChange={(e) => setN(k, e.target.value)} />
+            </label>
+          ))}
+        </div>
+        <p className="hint">Leave a box empty for no goal. Common guidance: added sugar under 25–36 g a day; protein around 0.7–1 g per lb of body weight when training.</p>
+        <UsdaKey toast={toast} />
+      </section>
+
+      {dirty && (
+        <div className="savebar">
+          <span>Unsaved changes</span>
+          <button className="btn" onClick={() => setS(data.settings)}>Discard</button>
+          <button
+            className="btn primary"
+            onClick={async () => {
+              await data.saveSettings(s);
+              toast({ msg: "Settings saved" });
+            }}
+          >
+            Save settings
+          </button>
+        </div>
+      )}
+
+      <section className="card">
+        <h2>Data</h2>
+        <p className="muted">
+          {data.sets.length.toLocaleString()} sets · {data.workouts.length} workouts · {data.food_logs.length} food entries · {data.foods.length} saved foods
+        </p>
+        <div className="row wrap">
+          <button className="btn" onClick={() => download(`loveyourtemple-sets-${dayKey(new Date())}.csv`, setsToCsv(data.sets))}>Export sets CSV (Excel)</button>
+          <button
+            className="btn"
+            onClick={() =>
+              download(
+                `loveyourtemple-backup-${dayKey(new Date())}.json`,
+                JSON.stringify(
+                  { app: "loveyourtemple", version: 2, exported_at: new Date().toISOString(), sets: data.sets, goals: data.goals, workouts: data.workouts, foods: data.foods, food_logs: data.food_logs, settings: data.settings },
+                  null,
+                  1,
+                ),
+                "application/json",
+              )
+            }
+          >
+            Export JSON backup
+          </button>
+          <label className="btn">
+            Import CSV / JSON
+            <input type="file" accept=".csv,.json" hidden onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
+          </label>
+          {data.sets.length === 0 && onImportExcel && (
+            <button className="btn primary" onClick={onImportExcel}>Import Excel history</button>
+          )}
+        </div>
+        <details className="danger-zone">
+          <summary>Danger zone</summary>
+          <p>Erase everything {mode === "local" ? "in this browser" : "in your account"}. Export a backup first.</p>
+          <button className="btn danger" onClick={() => confirm("Erase all sets, workouts, foods and goals? This can't be undone.") && data.clearAll()}>
+            Erase all data
+          </button>
+        </details>
+      </section>
+    </div>
+  );
+}
+
+/** Saved on this device only (never synced or shared), per USDA's key policy. */
+function UsdaKey({ toast }: { toast: (t: Toast) => void }) {
+  const [key, setKey] = useState(getUsdaKey);
+  const [saved, setSaved] = useState(getUsdaKey);
+  return (
+    <>
+      <label className="field">
+        <span>USDA API key (optional, this device only)</span>
+        <div className="row">
+          <input className="input grow" value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="Shared DEMO_KEY is used if empty" autoComplete="off" spellCheck={false} />
+          <button
+            className="btn"
+            disabled={key === saved}
+            onClick={() => {
+              setUsdaKey(key);
+              setSaved(key);
+              toast({ msg: key ? "USDA key saved on this device" : "USDA key removed" });
+            }}
+          >
+            Save key
+          </button>
+        </div>
+      </label>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Online food search uses USDA's shared key, which allows only a few searches an hour. A free personal key (1,000 searches an hour) comes
+        from fdc.nal.usda.gov/api-key-signup. It's kept only in this browser, not synced or shared with your crew.
+      </p>
+    </>
+  );
+}
