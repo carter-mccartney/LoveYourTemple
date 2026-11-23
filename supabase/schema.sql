@@ -298,6 +298,21 @@ create policy "own only" on public.reminders for all using (user_id = auth.uid()
 drop policy if exists "own devices" on public.push_subscriptions;
 create policy "own devices" on public.push_subscriptions for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+-- ---------- Table access for signed-in users ----------
+-- Newer Supabase projects don't expose SQL-created tables to the API automatically.
+-- Signed-in users ("authenticated") get table access; the policies above still decide
+-- which rows. Signed-out visitors ("anon") get nothing — the app requires sign-in.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on
+  public.profiles, public.exercise_sets, public.workouts, public.goals, public.foods, public.food_logs,
+  public.measurements, public.reminders, public.crews, public.crew_members, public.push_subscriptions
+  to authenticated;
+grant execute on function
+  public.shares_crew(uuid), public.can_see(uuid, text), public.is_crew_member(uuid),
+  public.create_crew(text), public.join_crew(text)
+  to authenticated;
+revoke execute on function public.create_crew(text), public.join_crew(text) from anon, public;
+
 -- ---------- Realtime (in-app crew alerts) ----------
 -- Realtime respects the policies above, so you only hear about crewmates.
 alter table public.workouts replica identity full; -- lets the app see that ended_at just changed
