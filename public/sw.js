@@ -1,5 +1,6 @@
-// Offline support (network-first, falling back to cache) and crew push notifications.
-const CACHE = "replog-v2";
+// Offline support (network-first, falling back to cache), push notifications, and
+// the rest-timer notification's "Log" / "Snooze" buttons.
+const CACHE = "replog-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) =>
@@ -25,7 +26,9 @@ self.addEventListener("fetch", (e) => {
   );
 });
 
-// Sent by the notify-crew Edge Function: { title, body, url: "#/crew/<id>" }
+// Sent by the Edge Functions:
+//   notify-crew:    { title, body, url: "#/crew/<id>" }
+//   send-reminders: { title, body, url: "#/pushups", tag: "lyt-timer", timer: true, repeat: 0, reps: 40 }
 self.addEventListener("push", (e) => {
   let msg = { title: "LoveYourTemple", body: "", url: "#/crew" };
   try {
@@ -33,23 +36,46 @@ self.addEventListener("push", (e) => {
   } catch {
     /* plain text or empty push */
   }
-  e.waitUntil(self.registration.showNotification(msg.title, { body: msg.body, icon: "icon.svg", badge: "icon.svg", tag: msg.tag, data: { url: msg.url } }));
+  const opts = { body: msg.body, icon: "icon.svg", badge: "icon.svg", tag: msg.tag, data: { url: msg.url } };
+  if (!msg.timer) {
+    e.waitUntil(self.registration.showNotification(msg.title, opts));
+    return;
+  }
+  e.waitUntil(
+    self.registration.getNotifications({ tag: "lyt-timer" }).then((open) => {
+      Object.assign(opts, {
+        requireInteraction: true,
+        vibrate: [300, 150, 300, 150, 600],
+        actions: [
+          { action: "log", title: msg.reps ? `Log ${msg.reps}` : "Log set" },
+          { action: "snooze", title: "Snooze 5 min" },
+        ],
+        // The open app already alerted for this one: replace it quietly. Repeats always alert again.
+        renotify: !(open.length && !msg.repeat),
+      });
+      return self.registration.showNotification(msg.title, opts);
+    }),
+  );
 });
 
-// Tapping a notification focuses the app (or opens it) on the friend's day.
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const hash = e.notification.data?.url || "#/crew";
-  const target = new URL(self.registration.scope).href + hash;
+  const action = e.action; // "log" | "snooze" | "" (the notification itself)
+  const scope = new URL(self.registration.scope).href;
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const c of list) {
-        if (c.url.startsWith(self.registration.scope)) {
-          c.postMessage({ type: "navigate", url: hash });
-          return c.focus();
-        }
+      const open = list.find((c) => c.url.startsWith(self.registration.scope));
+      if (action === "log" || action === "snooze") {
+        // App open somewhere: it logs/snoozes in place. Otherwise open it to do so.
+        if (open) return open.postMessage({ type: "timer-action", action });
+        return self.clients.openWindow(scope + "#/pushups/do-" + action);
       }
-      return self.clients.openWindow(target);
+      if (open) {
+        open.postMessage({ type: "navigate", url: hash });
+        return open.focus();
+      }
+      return self.clients.openWindow(scope + hash);
     }),
   );
 });

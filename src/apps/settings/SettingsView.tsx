@@ -6,6 +6,8 @@ import { WEEKDAY_NAMES, dayKey } from "../../lib/dates";
 import { csvToSets, download, setsToCsv } from "../../lib/csv";
 import { supabase } from "../../lib/supabase";
 import { getUsdaKey, setUsdaKey } from "../../lib/nutrition";
+import { chime, primeAudio, testAlarm } from "../../lib/alarm";
+import { getPhoneShortcut, setPhoneShortcut, startPhoneTimer } from "../../lib/timer";
 
 type AnyRow = Record<string, unknown> & { id?: string };
 const noId = ({ id: _id, ...r }: AnyRow) => r;
@@ -140,6 +142,58 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
             during work hours on workdays
           </label>
         </div>
+        <h3 style={{ marginTop: 16 }}>When the timer ends</h3>
+        <div className="row wrap">
+          <label className="field">
+            <span>Alarm sound (app open)</span>
+            <select className="input" value={s.alarmSeconds} onChange={(e) => set("alarmSeconds", Number(e.target.value))}>
+              <option value={0}>Short chime</option>
+              <option value={10}>Alarm, 10 seconds</option>
+              <option value={30}>Alarm, 30 seconds</option>
+              <option value={60}>Alarm, 1 minute</option>
+              <option value={300}>Alarm until I click (max 5 min)</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Remind me again</span>
+            <select className="input" value={s.remindAgainMin} onChange={(e) => set("remindAgainMin", Number(e.target.value))}>
+              <option value={0}>No</option>
+              <option value={2}>Every 2 min</option>
+              <option value={3}>Every 3 min</option>
+              <option value={5}>Every 5 min</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Up to</span>
+            <select
+              className="input"
+              value={s.remindAgainTimes}
+              disabled={!s.remindAgainMin}
+              onChange={(e) => set("remindAgainTimes", Number(e.target.value))}
+            >
+              {[1, 2, 3, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n} more {n === 1 ? "time" : "times"}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="btn"
+            onClick={() => {
+              primeAudio();
+              if (s.alarmSeconds > 0) testAlarm();
+              else chime();
+            }}
+          >
+            Test sound
+          </button>
+        </div>
+        <p className="hint">
+          The alarm plays while the app is open — even in a background tab or minimized window. Click anywhere in the app to silence it. Repeat
+          reminders are push notifications, so they reach your phone with the app closed; they stop as soon as you log a set or snooze.
+        </p>
+        <PhoneShortcut toast={toast} />
         <table className="table" style={{ marginTop: 12 }}>
           <thead>
             <tr>
@@ -323,6 +377,46 @@ function PasswordBox({ toast }: { toast: (t: Toast) => void }) {
       {err && <p className="error-text">{err}</p>}
       <p className="hint">Optional. With a password you can sign in without waiting for an email. Forgot it? Sign in with an email code and set a new one here.</p>
     </form>
+  );
+}
+
+/** iPhone: run a Shortcut that starts a Clock-app timer whenever a daily set is logged. This device only. */
+function PhoneShortcut({ toast }: { toast: (t: Toast) => void }) {
+  const [name, setName] = useState(getPhoneShortcut);
+  const [saved, setSaved] = useState(getPhoneShortcut);
+  const isApple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
+  if (!isApple && !saved) return null;
+  return (
+    <details style={{ marginTop: 12 }}>
+      <summary>Also start a timer in the iPhone Clock app</summary>
+      <p className="hint">
+        A real Clock timer rings out loud even when your phone is locked or on silent. Set up once on this iPhone:
+      </p>
+      <ol className="hint">
+        <li>Open the <strong>Shortcuts</strong> app → <strong>+</strong> → <strong>Add Action</strong> → search “Start Timer”.</li>
+        <li>Set it to 30 minutes (your rest time), then name the shortcut, e.g. <strong>Pushup Timer</strong>.</li>
+        <li>Type that exact name below and tap Save. The first time, iPhone asks to allow opening Shortcuts — tap Open.</li>
+      </ol>
+      <div className="row">
+        <input className="input grow" value={name} onChange={(e) => setName(e.target.value)} placeholder="Pushup Timer" autoComplete="off" />
+        <button
+          className="btn"
+          disabled={name.trim() === saved}
+          onClick={() => {
+            setPhoneShortcut(name.trim());
+            setSaved(name.trim());
+            toast({ msg: name.trim() ? "Saved. Logging a daily set will also start your Clock timer." : "Clock timer turned off" });
+          }}
+        >
+          Save
+        </button>
+        {saved && (
+          <button className="btn" onClick={startPhoneTimer}>
+            Test
+          </button>
+        )}
+      </div>
+    </details>
   );
 }
 

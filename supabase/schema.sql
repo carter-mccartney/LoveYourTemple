@@ -143,6 +143,14 @@ create table if not exists public.reminders (
   body text not null default '',
   sent boolean not null default false
 );
+-- Repeat reminders ("still time for your next set") and the notification's "Log 40" button.
+alter table public.reminders
+  add column if not exists exercise text,
+  add column if not exists reps int,
+  add column if not exists repeat_min int not null default 0,
+  add column if not exists max_sends int not null default 1,
+  add column if not exists sent_count int not null default 0,
+  add column if not exists last_sent_at timestamptz;
 create index if not exists reminders_due on public.reminders (due_at) where not sent;
 
 create table if not exists public.crews (

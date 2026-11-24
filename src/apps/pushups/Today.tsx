@@ -4,8 +4,7 @@ import type { Data } from "../../lib/useData";
 import type { Settings, WorkoutSet } from "../../lib/types";
 import { atTime, dayKey, fmtDuration, fmtTime, minutesBetween } from "../../lib/dates";
 import { habitSets, records, restMinutes, todayPlan, weekTable } from "../../lib/stats";
-import { addMinutes, enableAlerts, notificationsAllowed, startTimer, stopTimer, useRestTimer } from "../../lib/timer";
-import { Stat } from "../../components/Stat";
+import { addMinutes, enableAlerts, getPhoneShortcut, getTimer, notificationsAllowed, startPhoneTimer, startTimer, stopTimer, useRestTimer } from "../../lib/timer";import { Stat } from "../../components/Stat";
 import { WeekTable } from "../../components/WeekTable";
 
 export function useNow(ms: number) {
@@ -29,12 +28,20 @@ export function timerFits(settings: Settings, now = new Date()) {
   return settings.workdays.includes(now.getDay()) && now >= atTime(now, settings.workStart) && due <= atTime(now, settings.workEnd);
 }
 
+/** Reps for the next daily set: same as your last one, else the default. */
+export const nextReps = (data: Data, exercise: string) =>
+  data.sets.find((s) => s.exercise === exercise && !s.workout_id)?.reps ?? data.settings.defaultReps;
+
 /** Text for the "time for your next set" notification. */
-export function timerBody(data: Data, exercise: string, extraReps = 0) {
+export function timerBody(data: Data, exercise: string, extraReps = 0, next = nextReps(data, exercise)) {
   const plan = todayPlan(habitSets(data.sets, data.settings), exercise, data.settings, new Date());
   const reps = plan.reps + extraReps;
-  const next = data.sets.find((s) => s.exercise === exercise && !s.workout_id)?.reps ?? data.settings.defaultReps;
   return `${next} ${exercise} · ${reps}${plan.target ? ` / ${plan.target}` : ""} today`;
+}
+
+/** Start the rest timer for the next set of `exercise`. */
+export function startRest(data: Data, exercise: string, extraReps = 0, reps = nextReps(data, exercise)) {
+  startTimer(data.settings.intervalMin, timerBody(data, exercise, extraReps, reps), { exercise, reps });
 }
 
 /** Log a habit set (and start the rest timer). Shared by the Push-ups screen and the Home quick button. */
@@ -43,7 +50,10 @@ export async function logHabitSet(data: Data, toast: (t: Toast) => void, exercis
   if (!added) return false;
   navigator.vibrate?.(30);
   const timed = data.settings.autoTimer && timerFits(data.settings);
-  if (timed) startTimer(data.settings.intervalMin, timerBody(data, exercise, reps));
+  if (timed) {
+    startRest(data, exercise, reps, reps);
+    startPhoneTimer(); // iPhone Clock timer, if set up on this device
+  } else if (getTimer()) stopTimer(); // set done; stop any running reminder
   toast({
     msg: `Logged ${reps} ${exercise}${timed ? ` · next set in ${data.settings.intervalMin} min` : ` at ${fmtTime(new Date())}`}`,
     action: {
@@ -78,7 +88,7 @@ export function RestTimerCard({ data, exercise, compact }: { data: Data; exercis
             <div className="row">
               <button className="btn" onClick={() => addMinutes(5)} title="Snooze 5 minutes">+5 min</button>
               {!compact && (
-                <button className="btn" onClick={() => startTimer(mins, timerBody(data, exercise))} title={`Restart at ${mins}:00`}>
+                <button className="btn" onClick={() => startRest(data, exercise)} title={`Restart at ${mins}:00`}>
                   Restart
                 </button>
               )}
@@ -92,8 +102,13 @@ export function RestTimerCard({ data, exercise, compact }: { data: Data; exercis
       ) : (
         <div className="timer-row">
           <span className="muted small">No rest timer running.</span>
-          <button className="btn" onClick={() => startTimer(mins, timerBody(data, exercise))}>Start {mins}:00 timer</button>
+          <button className="btn" onClick={() => startRest(data, exercise)}>Start {mins}:00 timer</button>
         </div>
+      )}
+      {!compact && getPhoneShortcut() && (
+        <button className="link small" onClick={startPhoneTimer}>
+          Start the phone's Clock timer too
+        </button>
       )}
       {!perm && !compact && "Notification" in window && Notification.permission !== "denied" && (
         <button

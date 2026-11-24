@@ -166,6 +166,12 @@ export interface Settings {
   autoTimer: boolean;
   /** Only auto-start when the next set would fall inside work hours on a workday. */
   timerWorkHoursOnly: boolean;
+  /** How long the alarm rings when the rest timer ends (app open, even in a background tab). 0 = one short chime. */
+  alarmSeconds: number;
+  /** Re-send the reminder every N minutes until you log a set (0 = don't). Needs cloud sync. */
+  remindAgainMin: number;
+  /** How many extra reminders at most. */
+  remindAgainTimes: number;
 
   nutrition: {
     kcal: number | null; // daily target
@@ -204,6 +210,9 @@ export const DEFAULT_SETTINGS: Settings = {
   workdays: [1, 2, 3, 4, 5],
   autoTimer: true,
   timerWorkHoursOnly: true,
+  alarmSeconds: 30,
+  remindAgainMin: 3,
+  remindAgainTimes: 2,
   nutrition: { kcal: null, proteinMin: 150, carbsMax: null, sugarMax: 50, addedSugarMax: 25 },
   packed: { date: "", foodIds: [] },
 };

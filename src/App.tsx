@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { cloudStore, localStore, type DataStore } from "./lib/store";
@@ -6,8 +6,9 @@ import { useData } from "./lib/useData";
 import type { NewGoal, NewSet, Settings } from "./lib/types";
 import { go, useRoute } from "./lib/router";
 import { myCrews, notify, subscribeCrew } from "./lib/crew";
-import { chime, markFired, setTimerUser, showTimerNotification, useRestTimer } from "./lib/timer";
-import { logHabitSet } from "./apps/pushups/Today";
+import { addMinutes, ensurePushRegistered, getTimer, markFired, setReminderPrefs, setTimerUser, showTimerNotification, useRestTimer } from "./lib/timer";
+import { alarmPlannedFor, cancelAlarm, chime, primeAudio, scheduleAlarm, stopRinging } from "./lib/alarm";
+import { logHabitSet, nextReps } from "./apps/pushups/Today";
 import { SignIn } from "./components/SignIn";
 import { Home } from "./apps/home/Home";
 import { PushupsApp } from "./apps/pushups/PushupsApp";
@@ -83,19 +84,77 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
 
   // Rest timer alarm: fires on whatever screen is open (or as a system notification if in the background).
   const timer = useRestTimer();
+  const { alarmSeconds, remindAgainMin, remindAgainTimes } = data.settings;
   useEffect(() => {
     setTimerUser(userId ?? null);
+    if (userId) ensurePushRegistered(userId);
   }, [userId]);
+  useEffect(() => {
+    setReminderPrefs({ remindAgainMin, remindAgainTimes });
+  }, [remindAgainMin, remindAgainTimes]);
+
+  // Plan the alarm sound on the audio clock as soon as a timer starts, so it rings on time even
+  // in a throttled background tab. Re-planned when the due time changes (snooze/restart/stop).
+  const dueAt = timer?.dueAt;
+  useEffect(() => {
+    const t = getTimer();
+    if (!dueAt || !t || t.fired || alarmSeconds <= 0 || dueAt < Date.now() - 60000) return;
+    scheduleAlarm(dueAt, alarmSeconds);
+    return cancelAlarm;
+  }, [dueAt, alarmSeconds]);
+
+  // Any click or key press unlocks sound for later alarms and silences one that's ringing.
+  useEffect(() => {
+    const on = () => {
+      primeAudio();
+      stopRinging();
+    };
+    window.addEventListener("pointerdown", on);
+    window.addEventListener("keydown", on);
+    return () => {
+      window.removeEventListener("pointerdown", on);
+      window.removeEventListener("keydown", on);
+    };
+  }, []);
+
+  // "Log 40" / "Snooze 5 min" — from the notification's buttons or the in-app banner.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const timerAction = useCallback(
+    (action: string) => {
+      stopRinging();
+      const d = dataRef.current;
+      const ex = getTimer()?.exercise ?? d.settings.defaultExercise;
+      if (action === "snooze") {
+        addMinutes(5);
+        setToast({ msg: "Snoozed 5 minutes" });
+      } else if (action === "log") {
+        logHabitSet(d, setToast, ex, getTimer()?.reps ?? nextReps(d, ex));
+      }
+    },
+    [setToast],
+  );
+
+  // The app was opened by a notification button while closed: #/pushups/do-log or #/pushups/do-snooze.
+  const pending = route[0] === "pushups" && route[1]?.startsWith("do-") ? route[1].slice(3) : null;
+  useEffect(() => {
+    if (!pending || data.loading) return;
+    history.replaceState(null, "", "#/pushups");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    timerAction(pending);
+  }, [pending, data.loading, timerAction]);
+
   useEffect(() => {
     if (!timer || timer.fired) return;
     const fire = () => {
       markFired();
-      const ex = data.settings.defaultExercise;
-      const reps = data.sets.find((s) => s.exercise === ex && !s.workout_id)?.reps ?? data.settings.defaultReps;
-      chime();
-      navigator.vibrate?.([200, 100, 200]);
-      setToastState({ msg: `Time for ${reps} ${ex}`, action: { label: `Log ${reps}`, run: () => logHabitSet(data, setToast, ex, reps) } });
-      showTimerNotification(`Time for ${ex}`, timer.body);
+      const ex = timer.exercise ?? data.settings.defaultExercise;
+      const reps = timer.reps ?? nextReps(data, ex);
+      if (alarmSeconds <= 0) chime();
+      else if (!alarmPlannedFor(timer.dueAt)) scheduleAlarm(Date.now(), alarmSeconds); // computer was asleep, or sound wasn't unlocked yet
+      navigator.vibrate?.([300, 150, 300, 150, 600]);
+      setToastState({ msg: `Time for ${reps} ${ex}`, action: { label: `Log ${reps}`, run: () => timerAction("log") } });
+      showTimerNotification(`Time for ${ex}`, timer.body, reps);
     };
     const ms = timer.dueAt - Date.now();
     if (ms < -10 * 60000) return markFired(); // long overdue (e.g. app reopened next morning): stay quiet
@@ -108,7 +167,7 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
       clearTimeout(t);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [timer, data, setToast]);
+  }, [timer, data, alarmSeconds, timerAction]);
 
   // Live crew activity → toast + system notification, deep-linking to their day.
   useEffect(() => {
@@ -129,10 +188,16 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
 
   // A tapped notification asks the open app to navigate (see public/sw.js).
   useEffect(() => {
-    const on = (e: MessageEvent) => e.data?.type === "navigate" && (window.location.hash = e.data.url);
+    const on = (e: MessageEvent) => {
+      if (e.data?.type === "navigate") {
+        stopRinging();
+        window.location.hash = e.data.url;
+      }
+      if (e.data?.type === "timer-action") timerAction(e.data.action);
+    };
     navigator.serviceWorker?.addEventListener("message", on);
     return () => navigator.serviceWorker?.removeEventListener("message", on);
-  }, []);
+  }, [timerAction]);
 
   async function importExcel() {
     if (!excelHistory) return;
