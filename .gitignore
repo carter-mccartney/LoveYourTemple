@@ -12,3 +12,4 @@ scripts/personal-settings.json
 # Never commit keys (VAPID private key, webhook secret, USDA key, Supabase service key)
 *secrets*
 supabase/.temp/
+exports/

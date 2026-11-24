@@ -69,6 +69,7 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
             <button className="btn" onClick={() => supabase?.auth.signOut()}>Sign out</button>
           </div>
         )}
+        {mode !== "local" && <PasswordBox toast={toast} />}
       </section>
 
       <section className="card">
@@ -273,6 +274,55 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
         </details>
       </section>
     </div>
+  );
+}
+
+/** Set or change the account password, so later sign-ins don't need an email. */
+function PasswordBox({ toast }: { toast: (t: Toast) => void }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (pw.length < 8) return setErr("Use at least 8 characters.");
+    if (pw !== pw2) return setErr("The two passwords don't match.");
+    setBusy(true);
+    const { error } = await supabase!.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) {
+      setErr(
+        /reauthenticat/i.test(error.message)
+          ? "For security, sign out and sign back in with an email code, then set your password right away."
+          : /different from the old/i.test(error.message)
+            ? "That's already your password."
+            : error.message,
+      );
+      return;
+    }
+    setPw("");
+    setPw2("");
+    toast({ msg: "Password saved. Next time, sign in with your email and password." });
+  }
+
+  return (
+    <form onSubmit={save} style={{ marginTop: 12 }}>
+      <div className="row wrap">
+        <label className="field grow">
+          <span>New password</span>
+          <input className="input" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+        </label>
+        <label className="field grow">
+          <span>Type it again</span>
+          <input className="input" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+        </label>
+        <button className="btn" disabled={busy || !pw}>Set password</button>
+      </div>
+      {err && <p className="error-text">{err}</p>}
+      <p className="hint">Optional. With a password you can sign in without waiting for an email. Forgot it? Sign in with an email code and set a new one here.</p>
+    </form>
   );
 }
 
