@@ -94,8 +94,11 @@ async function syncRemote(t: RestTimer | null, announce = false) {
       last_sent_at: null,
     };
     // Older databases lack newer columns: drop them one step at a time so the reminder still saves.
-    const shared = { ...full, started_at, announce, from_endpoint: announce ? await myEndpoint() : null };
-    for (const row of [shared, { ...full, started_at }, full, base]) {
+    const timed = { ...full, started_at };
+    // Only a new timer sets the "tell my iPhone" flag. A snooze leaves it alone, so snoozing right
+    // after starting doesn't cancel the announcement before send-reminders gets to it.
+    const rows = announce ? [{ ...timed, announce: true, from_endpoint: await myEndpoint() }, timed, full, base] : [timed, full, base];
+    for (const row of rows) {
       const { error } = await supabase.from("reminders").upsert(row);
       if (!error) break;
       console.warn("Rest timer: saving with", Object.keys(row).length, "columns failed:", error.message);
