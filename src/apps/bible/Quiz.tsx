@@ -173,6 +173,14 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
                     {card.explain}
                     {card.explain && card.ref ? " " : ""}
                     {card.ref && <span className="muted">({card.ref})</span>}
+                    {card.link && (
+                      <>
+                        {" "}
+                        <a href={card.link} target="_blank" rel="noreferrer">
+                          See the source
+                        </a>
+                      </>
+                    )}
                   </p>
                 )}
                 <div className="row wrap">

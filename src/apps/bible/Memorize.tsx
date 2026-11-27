@@ -507,7 +507,7 @@ function Versions({ data, toast }: { data: Data; toast: (t: Toast) => void }) {
       </table>
       <p className="hint">
         ESV, NKJV, NIV, NLT and The Message are copyrighted, so they can't be built into the app. ESV and NLT offer free personal keys; for the others, paste a verse's
-        text when you add it.
+        text when you add it. For a free built-in modern version, the BSB reads much like the NIV/ESV, and the AKJV is the KJV in modern words (like the NKJV).
       </p>
       <KeyBox version="ESV" signup="https://api.esv.org/" steps="Create a free account at api.esv.org → “Create an API key” (non-commercial) → copy the token." toast={toast} />
       <KeyBox version="NLT" signup="https://api.nlt.to/" steps="Sign up at api.nlt.to for a free key → copy it." toast={toast} />

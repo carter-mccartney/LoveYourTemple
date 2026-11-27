@@ -11,6 +11,8 @@ export interface VersionInfo {
 
 export const VERSIONS: VersionInfo[] = [
   { id: "KJV", name: "King James Version", source: "bundled" },
+  { id: "BSB", name: "Berean Standard Bible", source: "bundled" },
+  { id: "AKJV", name: "American King James Version", source: "bundled" },
   { id: "ASV", name: "American Standard Version (1901)", source: "bundled" },
   { id: "YLT", name: "Young's Literal Translation", source: "bundled" },
   { id: "BBE", name: "Bible in Basic English", source: "bundled" },

@@ -3,8 +3,9 @@
 import { BOOKS, SECTIONS, book, sectionOf, type Book } from "./canon";
 import { loadBook } from "./text";
 import type { CustomCard } from "../types";
+import { TEACHER_CARDS } from "./teachers";
 
-export type Category = "people" | "events" | "places" | "numbers" | "truefalse" | "inbible" | "whosaid" | "books" | "verses" | "mine";
+export type Category = "people" | "events" | "places" | "numbers" | "truefalse" | "inbible" | "whosaid" | "teachers" | "books" | "verses" | "mine";
 
 export const CATEGORIES: { id: Category; label: string }[] = [
   { id: "people", label: "People" },
@@ -14,6 +15,7 @@ export const CATEGORIES: { id: Category; label: string }[] = [
   { id: "truefalse", label: "True or false" },
   { id: "inbible", label: "Is it in the Bible?" },
   { id: "whosaid", label: "Who said it?" },
+  { id: "teachers", label: "Who taught it?" },
   { id: "books", label: "Books" },
   { id: "verses", label: "Verses" },
   { id: "mine", label: "My cards" },
@@ -31,6 +33,8 @@ export interface QCard {
   choices?: string[];
   ref?: string;
   explain?: string;
+  /** Where to read or watch the original. */
+  link?: string;
 }
 
 // ---------- Hand-written cards ----------
@@ -293,6 +297,7 @@ export const CURATED: QCard[] = [
     explain,
   })),
   ...WHO_SAID.map(([s, who, ref, wrong], i): QCard => ({ id: `who-${i}`, cat: "whosaid", prompt: "Who said it?", quote: s, kind: "mc", choices: shuffle([who, ...wrong]), answers: [who], ref })),
+  ...TEACHER_CARDS,
 ];
 
 // ---------- Generated questions ----------
@@ -331,6 +336,7 @@ async function verseCard(version: string): Promise<QCard> {
   const c = Math.floor(Math.random() * chapters.length);
   const v = Math.floor(Math.random() * chapters[c].length);
   const t = chapters[c][v];
+  if (!t) return verseCard(version); // a verse this translation omits
   const ref = `${b.name} ${c + 1}:${v + 1}`;
   const kind = Math.floor(Math.random() * 3);
   const id = `gen-verse-${kind}-${b.n}-${c}-${v}`;
@@ -367,7 +373,7 @@ export async function nextCard(cats: Category[], opts: { version: string; hebrew
   const p = pick(pool);
   if (p === "book") return bookCard(opts.hebrewsWithPaul);
   if (p === "verse") return verseCard(opts.version);
-  return p.kind === "mc" && p.cat === "whosaid" ? { ...p, choices: shuffle(p.choices!) } : p;
+  return p.kind === "mc" && (p.cat === "whosaid" || p.cat === "teachers") ? { ...p, choices: shuffle(p.choices!) } : p;
 }
 
 export const CURATED_COUNT = CURATED.length;

@@ -1,6 +1,7 @@
 """
 Builds the app's Bible files from public-domain JSON texts
-(github.com/scrollmapper/bible_databases, folder formats/json: KJV.json, ASV.json, YLT.json, BBE.json).
+(github.com/scrollmapper/bible_databases, folder formats/json: KJV, BSB, AKJV, ASV, YLT, BBE .json).
+All public domain. The BSB leaves 16 verses blank (not in the earliest manuscripts).
 
 Writes:
   public/bible/<version>/<01..66>.json   one book: [[verse text, ...] per chapter]
@@ -12,10 +13,12 @@ import json
 import pathlib
 import sys
 
-VERSIONS = ["KJV", "ASV", "YLT", "BBE"]
+VERSIONS = ["KJV", "BSB", "AKJV", "ASV", "YLT", "BBE"]
 
 
 def clean(version, text):
+    if version == "AKJV":
+        text = text.replace("¶", "")  # paragraph marks
     text = " ".join(text.split())
     if version == "YLT":
         text = text.replace("`", "’")  # YLT uses backticks as apostrophes

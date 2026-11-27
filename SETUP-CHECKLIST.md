@@ -3,10 +3,10 @@
 Check items off as you go. Secrets come from your private secrets file (outside this repo) — never paste them here.
 
 ## 1. Sign-in email (Gmail SMTP)
-- [ ] myaccount.google.com/apppasswords (personal Gmail) → delete the old one → create a new app password.
-- [ ] Supabase → Authentication → Emails → SMTP Settings: host `smtp.gmail.com`, port `465`, username = full Gmail address, password = the 16 letters **with no spaces**, sender email = same Gmail. Save.
-- [ ] Authentication → Emails → Templates → **Magic Link** and **Confirm signup**: add the code `{{ .Token }}` to the message (template HTML is in the chat history / below).
-- [ ] Authentication → URL Configuration: Site URL and Redirect URL = `https://carter-mccartney.github.io/LoveYourTemple/`.
+- [x] myaccount.google.com/apppasswords (personal Gmail) → delete the old one → create a new app password.
+- [x] Supabase → Authentication → Emails → SMTP Settings: host `smtp.gmail.com`, port `465`, username = full Gmail address, password = the 16 letters **with no spaces**, sender email = same Gmail. Save.
+- [x] Authentication → Emails → Templates → **Magic Link** and **Confirm signup**: add the code `{{ .Token }}` to the message (template HTML is in the chat history / below).
+- [x] Authentication → URL Configuration: Site URL and Redirect URL = `https://carter-mccartney.github.io/LoveYourTemple/`.
 
 ```html
 <div style="font-family:system-ui,sans-serif;max-width:420px;margin:auto;padding:24px;text-align:center">
@@ -18,9 +18,9 @@ Check items off as you go. Secrets come from your private secrets file (outside 
 ```
 
 ## 2. Your account and history
-- [ ] Live site → "Email me a link or code" → type the code.
-- [ ] Settings → **Set password**.
-- [ ] Settings → **Import CSV / JSON** → `exports/loveyourtemple-import.json` (**once only** — importing twice duplicates sets).
+- [x] Live site → "Email me a link or code" → type the code.
+- [x] Settings → **Set password**.
+- [x] Settings → **Import CSV / JSON** → `exports/loveyourtemple-import.json` (**once only** — importing twice duplicates sets).
 
 ## 3. Database updates (SQL Editor → run each block)
 - [ ] Access for signed-in users — the "Table access for signed-in users" block in `supabase/schema.sql` (skip if already run).
@@ -55,7 +55,7 @@ $$);
 - [ ] Windows: Edge/Chrome → Settings → System → allow running in the background.
 
 ## 5. Phone
-- [ ] Safari → live site → Share → **Add to Home Screen** → open from the home screen → sign in with password → turn on notifications.
+- [x] Safari → live site → Share → **Add to Home Screen** → open from the home screen → sign in with password → turn on notifications.
 - [ ] Optional: Settings → "Also start a timer in the iPhone Clock app" (Shortcuts setup).
 
 ## 6. Crew alerts (later, when your wife / buddy join)
