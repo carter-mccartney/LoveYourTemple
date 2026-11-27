@@ -7,6 +7,9 @@
 //    the due time is also saved to Supabase and the send-reminders Edge Function pushes the
 //    notification — and repeats it every few minutes until you log a set.
 //  • iPhone, optionally: a Shortcut starts a real Clock-app timer when you log a set.
+//
+// In cloud mode the timer is shared by all your devices: log a set on the computer and your
+// phone shows the same countdown (the reminders row is the shared copy; see pullRemoteTimer).
 import { useSyncExternalStore } from "react";
 import { supabase } from "./supabase";
 import { enableNotifications } from "./crew";
@@ -55,7 +58,7 @@ export const useRestTimer = () =>
   );
 
 let remoteUser: string | null = null;
-let prefs = { remindAgainMin: 0, remindAgainTimes: 0 };
+let prefs = { remindAgainMin: 0, remindAgainTimes: 0, intervalMin: 30 };
 /** Cloud mode: mirror the due time to Supabase so a push arrives even if the app is closed. */
 export const setTimerUser = (id: string | null) => (remoteUser = id);
 export const setReminderPrefs = (p: typeof prefs) => (prefs = p);
@@ -68,8 +71,9 @@ async function syncRemote(t: RestTimer | null) {
       return;
     }
     const base = { user_id: remoteUser, due_at: new Date(t.dueAt).toISOString(), body: t.body, sent: false };
+    const started_at = new Date(t.startedAt).toISOString();
     const repeats = prefs.remindAgainMin > 0 ? prefs.remindAgainTimes : 0;
-    const { error } = await supabase.from("reminders").upsert({
+    const full = {
       ...base,
       exercise: t.exercise ?? null,
       reps: t.reps ?? null,
@@ -77,15 +81,65 @@ async function syncRemote(t: RestTimer | null) {
       max_sends: 1 + repeats,
       sent_count: 0,
       last_sent_at: null,
-    });
-    // Database not updated for repeat reminders yet: still save the basic reminder.
-    if (error) await supabase.from("reminders").upsert(base);
+    };
+    // Older databases lack newer columns: drop them one step at a time so the reminder still saves.
+    for (const row of [{ ...full, started_at }, full, base]) {
+      const { error } = await supabase.from("reminders").upsert(row);
+      if (!error) break;
+    }
   } catch {
     /* in-app alert still works */
   }
 }
 
+// ---------- Sharing the timer between your devices ----------
+
+/** When this device last changed the timer — its own save may not have reached the server yet. */
+let lastLocalChange = 0;
+
+interface RemoteRow {
+  due_at: string;
+  body: string;
+  started_at?: string | null;
+  exercise?: string | null;
+  reps?: number | null;
+}
+
+/** Make this device's timer match the shared copy (started, snoozed or stopped elsewhere). */
+export async function pullRemoteTimer() {
+  if (!supabase || !remoteUser) return;
+  const asked = Date.now();
+  let res = await supabase.from("reminders").select("due_at, body, started_at, exercise, reps").eq("user_id", remoteUser).maybeSingle();
+  // Database not updated for timer sharing yet: the basic columns still work.
+  if (res.error) res = (await supabase.from("reminders").select("due_at, body").eq("user_id", remoteUser).maybeSingle()) as typeof res;
+  if (res.error || lastLocalChange > asked - 15000) return;
+  const row = res.data as RemoteRow | null;
+  const dueAt = row ? Date.parse(row.due_at) : 0;
+  // No timer elsewhere, or only an old one (e.g. from yesterday).
+  if (!row || dueAt < Date.now() - 3 * 3600000) {
+    if (state && !state.fired) set(null);
+    return;
+  }
+  if (state && Math.abs(state.dueAt - dueAt) < 1500) return; // already the same
+  const startedAt = row.started_at ? Date.parse(row.started_at) : dueAt - prefs.intervalMin * 60000;
+  set({ startedAt, dueAt, body: row.body, fired: dueAt <= Date.now(), exercise: row.exercise ?? undefined, reps: row.reps ?? undefined });
+}
+
+/** Live updates while the app is open. Returns a function that stops listening. */
+export function watchRemoteTimer(): () => void {
+  if (!supabase || !remoteUser) return () => {};
+  const db = supabase;
+  const ch = db
+    .channel("my-rest-timer")
+    .on("postgres_changes", { event: "*", schema: "public", table: "reminders" }, () => pullRemoteTimer())
+    .subscribe();
+  return () => {
+    db.removeChannel(ch);
+  };
+}
+
 export function startTimer(minutes: number, body: string, next?: { exercise: string; reps: number }) {
+  lastLocalChange = Date.now();
   const now = Date.now();
   const t: RestTimer = { startedAt: now, dueAt: now + minutes * 60000, body, fired: false, ...next };
   set(t);
@@ -94,12 +148,14 @@ export function startTimer(minutes: number, body: string, next?: { exercise: str
 
 export function addMinutes(minutes: number) {
   if (!state) return;
+  lastLocalChange = Date.now();
   const t = { ...state, dueAt: Math.max(Date.now(), state.dueAt) + minutes * 60000, fired: false };
   set(t);
   syncRemote(t);
 }
 
 export function stopTimer() {
+  lastLocalChange = Date.now();
   set(null);
   syncRemote(null);
 }
@@ -170,10 +226,15 @@ export const setPhoneShortcut = (name: string) => {
   }
 };
 
-/** Run the user's Shortcut (e.g. "Start Timer 30 min"), which starts a real Clock-app timer. */
+/**
+ * Run the user's Shortcut, which starts a real Clock-app timer. It's handed the time left in
+ * seconds (so 1.5 minutes → 90), to use as the Start Timer duration.
+ */
 export function startPhoneTimer() {
   const name = getPhoneShortcut();
   if (!name) return false;
-  window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(name)}`;
+  const left = state && state.dueAt > Date.now() ? (state.dueAt - Date.now()) / 1000 : prefs.intervalMin * 60;
+  const seconds = Math.max(1, Math.round(left));
+  window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=text&text=${seconds}`;
   return true;
 }

@@ -145,6 +145,18 @@
 .w-missing { color: var(--bad); text-decoration: underline wavy; }
 .w-extra { color: var(--muted); text-decoration: line-through; }
 
+/* Challenge answer history */
+.history-list { display: flex; flex-direction: column; gap: 8px; }
+.history-item { padding: 10px 12px; border-radius: 10px; border-left: 4px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: 3px; }
+.history-item.h-right { border-left-color: var(--good); }
+.history-item.h-close { border-left-color: var(--close); }
+.history-item.h-wrong { border-left-color: var(--bad); }
+.history-quote { font-family: Georgia, "Times New Roman", serif; color: var(--text-2); font-size: 0.92rem; }
+.pill.h-pill-right { background: var(--good-soft); color: var(--good); }
+.pill.h-pill-close { background: var(--warn-soft); color: var(--close); }
+.pill.h-pill-wrong { background: var(--bad-soft); color: var(--bad); }
+tr.on td { background: var(--accent-soft); }
+
 /* Question settings */
 .warn-note { color: var(--close); font-weight: 600; }
 .stack.tight h3 { margin: 0; }

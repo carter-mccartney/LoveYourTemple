@@ -106,7 +106,7 @@ export function RestTimerCard({ data, exercise, compact }: { data: Data; exercis
         </div>
       )}
       {!compact && getPhoneShortcut() && (
-        <button className="link small" onClick={startPhoneTimer}>
+        <button className="link small" onClick={() => startPhoneTimer()}>
           Start the phone's Clock timer too
         </button>
       )}

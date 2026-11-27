@@ -20,6 +20,35 @@ const loadStats = (): Tally => {
     return { right: 0, total: 0, best: 0 };
   }
 };
+// Every answer, newest last (kept on this device, last 1,000).
+interface Answered {
+  at: number;
+  cat: Category;
+  prompt: string;
+  quote?: string;
+  given: string;
+  answer: string;
+  grade: Grade;
+  ref?: string;
+  explain?: string;
+  link?: string;
+}
+const HISTORY_KEY = "lyt.quiz.history";
+const loadHistory = (): Answered[] => {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+};
+const saveHistory = (h: Answered[]) => {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(-1000)));
+  } catch {
+    /* ignore */
+  }
+};
+
 const saveStats = (t: Tally) => {
   try {
     localStorage.setItem(STATS_KEY, JSON.stringify(t));
@@ -38,6 +67,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
   const [stats, setStats] = useState(loadStats);
   const [err, setErr] = useState<string | null>(null);
   const [cardsOpen, setCardsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const recent = useRef(new Set<string>());
   const versions = quizVersions(data);
   const outside = data.settings.bible.outsideQuestions;
@@ -66,6 +96,11 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
 
   function record(grade: Grade, picked?: string) {
     setResult({ grade, picked });
+    if (card) {
+      const given = picked ?? (typed.trim() || "(shown the answer)");
+      const { cat, prompt, quote, answers, ref, explain, link } = card;
+      saveHistory([...loadHistory(), { at: Date.now(), cat, prompt, quote, given, answer: answers[0], grade, ref, explain, link }]);
+    }
     const ok = grade === "right";
     setSession((s) => {
       const streak = ok ? s.streak + 1 : 0;
@@ -78,6 +113,8 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
   /** "Close" answers: you decide whether it counts. */
   function overrule(ok: boolean) {
     setResult({ grade: ok ? "right" : "wrong" });
+    const h = loadHistory();
+    if (h.length) saveHistory([...h.slice(0, -1), { ...h[h.length - 1], grade: ok ? "right" : "wrong" }]);
     if (ok) {
       setSession((s) => ({ ...s, right: s.right + 1, streak: s.streak + 1 }));
       const t = { ...stats, right: stats.right + 1 };
@@ -92,6 +129,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
     <div className="stack">
       <div className="row wrap">
         <h1 className="grow">Bible challenge</h1>
+        <button className="btn" onClick={() => setHistoryOpen(true)}>My answers</button>
         <button className="btn" onClick={() => setCardsOpen(true)}>My cards ({data.settings.bible.customCards.length})</button>
       </div>
       <div className="chips">
@@ -223,6 +261,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
         )}
       </section>
       {cardsOpen && <MyCards data={data} toast={toast} onClose={() => setCardsOpen(false)} />}
+      {historyOpen && <History onClose={() => setHistoryOpen(false)} />}
     </div>
   );
 }
@@ -287,6 +326,129 @@ function MyCards({ data, toast, onClose }: { data: Data; toast: (t: Toast) => vo
         )}
         <div className="row end">
           <button className="btn" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const GRADE_LABEL: Record<Grade, string> = { right: "Right", close: "Close", wrong: "Missed" };
+
+/** Your past answers, with how you're doing in each category. */
+function History({ onClose }: { onClose: () => void }) {
+  const [all, setAll] = useState(loadHistory);
+  const [show, setShow] = useState<"all" | "wrong" | "right">("all");
+  const [cat, setCat] = useState<Category | "">("");
+  const [limit, setLimit] = useState(50);
+  const byCat = CATEGORIES.map((c) => {
+    const rows = all.filter((a) => a.cat === c.id);
+    return { ...c, n: rows.length, right: rows.filter((a) => a.grade === "right").length };
+  }).filter((c) => c.n);
+  const rows = all
+    .filter((a) => (show === "all" ? true : show === "right" ? a.grade === "right" : a.grade !== "right") && (!cat || a.cat === cat))
+    .reverse();
+  const when = (t: number) => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <Modal title="My answers" onClose={onClose}>
+      <div className="stack tight">
+        {all.length === 0 ? (
+          <p className="muted">No answers yet. Every question you answer shows up here.</p>
+        ) : (
+          <>
+            <p className="hint" style={{ marginTop: 0 }}>
+              How you're doing by category. Tap one to see just those answers.
+            </p>
+            <table className="table">
+              <tbody>
+                {byCat.map((c) => (
+                  <tr key={c.id} className={cat === c.id ? "on" : ""} onClick={() => setCat(cat === c.id ? "" : c.id)} style={{ cursor: "pointer" }}>
+                    <td>{c.label}</td>
+                    <td className="num muted">
+                      {c.right}/{c.n}
+                    </td>
+                    <td className="num">{Math.round((100 * c.right) / c.n)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="row wrap">
+              <div className="seg">
+                {(
+                  [
+                    ["all", "All"],
+                    ["wrong", "Missed"],
+                    ["right", "Right"],
+                  ] as const
+                ).map(([k, l]) => (
+                  <button key={k} className={show === k ? "on" : ""} onClick={() => setShow(k)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {cat && (
+                <button className="chip on" onClick={() => setCat("")}>
+                  {CATEGORIES.find((c) => c.id === cat)?.label} ✕
+                </button>
+              )}
+              <span className="grow" />
+              <span className="muted small">{rows.length} answers</span>
+            </div>
+            <div className="history-list">
+              {rows.slice(0, limit).map((a) => (
+                <div key={a.at} className={`history-item h-${a.grade}`}>
+                  <div className="row">
+                    <span className="eyebrow grow">
+                      {CATEGORIES.find((c) => c.id === a.cat)?.label} · {when(a.at)}
+                    </span>
+                    <span className={`pill h-pill-${a.grade}`}>{GRADE_LABEL[a.grade]}</span>
+                  </div>
+                  <div>{a.prompt}</div>
+                  {a.quote && <div className="history-quote">{a.quote}</div>}
+                  <div className="small">
+                    You: <strong>{a.given}</strong>
+                    {a.given !== a.answer && (
+                      <>
+                        {" "}
+                        · Answer: <strong>{a.answer}</strong>
+                      </>
+                    )}
+                  </div>
+                  {(a.explain || a.ref || a.link) && (
+                    <div className="small muted">
+                      {a.explain} {a.ref && `(${a.ref})`}{" "}
+                      {a.link && (
+                        <a href={a.link} target="_blank" rel="noreferrer">
+                          Source
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {rows.length > limit && (
+              <button className="btn" onClick={() => setLimit(limit + 100)}>
+                Show more
+              </button>
+            )}
+          </>
+        )}
+        <div className="row end">
+          {all.length > 0 && (
+            <button
+              className="btn"
+              onClick={() => {
+                if (!confirm("Clear your answer history on this device?")) return;
+                saveHistory([]);
+                setAll([]);
+              }}
+            >
+              Clear history
+            </button>
+          )}
+          <button className="btn primary" onClick={onClose}>
+            Done
+          </button>
         </div>
       </div>
     </Modal>

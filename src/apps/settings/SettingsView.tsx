@@ -400,9 +400,17 @@ function PhoneShortcut({ toast }: { toast: (t: Toast) => void }) {
         A real Clock timer rings out loud even when your phone is locked or on silent. Set up once on this iPhone:
       </p>
       <ol className="hint">
-        <li>Open the <strong>Shortcuts</strong> app → <strong>+</strong> → <strong>Add Action</strong> → search “Start Timer”.</li>
-        <li>Set it to 30 minutes (your rest time), then name the shortcut, e.g. <strong>Pushup Timer</strong>.</li>
-        <li>Type that exact name below and tap Save. The first time, iPhone asks to allow opening Shortcuts — tap Open.</li>
+        <li>
+          Open the <strong>Shortcuts</strong> app → <strong>+</strong> → <strong>Add Action</strong> → search “Start Timer” (Clock).
+        </li>
+        <li>
+          Tap the timer's length → tap the variable button above the keyboard → <strong>Shortcut Input</strong>, and set the unit to{" "}
+          <strong>seconds</strong>. The app sends the rest time in seconds (30 min → 1800, 1.5 min → 90), so the Clock timer always matches.
+        </li>
+        <li>
+          Name the shortcut, e.g. <strong>Pushup Timer</strong>, type that exact name below and tap Save. The first time, iPhone asks to allow opening
+          Shortcuts — tap Open.
+        </li>
       </ol>
       <div className="row">
         <input className="input grow" value={name} onChange={(e) => setName(e.target.value)} placeholder="Pushup Timer" autoComplete="off" />
@@ -418,7 +426,7 @@ function PhoneShortcut({ toast }: { toast: (t: Toast) => void }) {
           Save
         </button>
         {saved && (
-          <button className="btn" onClick={startPhoneTimer}>
+          <button className="btn" onClick={() => startPhoneTimer()}>
             Test
           </button>
         )}

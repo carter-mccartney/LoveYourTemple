@@ -6,7 +6,7 @@ import { useData } from "./lib/useData";
 import type { NewGoal, NewSet, Settings } from "./lib/types";
 import { go, useRoute } from "./lib/router";
 import { myCrews, notify, subscribeCrew } from "./lib/crew";
-import { addMinutes, ensurePushRegistered, getTimer, markFired, setReminderPrefs, setTimerUser, showTimerNotification, useRestTimer } from "./lib/timer";
+import { addMinutes, ensurePushRegistered, getTimer, markFired, pullRemoteTimer, setReminderPrefs, setTimerUser, showTimerNotification, useRestTimer, watchRemoteTimer } from "./lib/timer";
 import { alarmPlannedFor, cancelAlarm, chime, primeAudio, scheduleAlarm, stopRinging } from "./lib/alarm";
 import { logHabitSet, nextReps } from "./apps/pushups/Today";
 import { SignIn } from "./components/SignIn";
@@ -87,14 +87,50 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
 
   // Rest timer alarm: fires on whatever screen is open (or as a system notification if in the background).
   const timer = useRestTimer();
-  const { alarmSeconds, remindAgainMin, remindAgainTimes } = data.settings;
+  const { alarmSeconds, remindAgainMin, remindAgainTimes, intervalMin } = data.settings;
   useEffect(() => {
     setTimerUser(userId ?? null);
     if (userId) ensurePushRegistered(userId);
   }, [userId]);
   useEffect(() => {
-    setReminderPrefs({ remindAgainMin, remindAgainTimes });
-  }, [remindAgainMin, remindAgainTimes]);
+    setReminderPrefs({ remindAgainMin, remindAgainTimes, intervalMin });
+  }, [remindAgainMin, remindAgainTimes, intervalMin]);
+
+  // Your other devices: share the rest timer live, and pick up sets logged elsewhere.
+  const reloadRef = useRef(data.reload);
+  reloadRef.current = data.reload;
+  useEffect(() => {
+    if (!userId || !supabase) return;
+    const db = supabase;
+    pullRemoteTimer();
+    const offTimer = watchRemoteTimer();
+    let soon: ReturnType<typeof setTimeout> | undefined;
+    const refreshSoon = () => {
+      clearTimeout(soon);
+      soon = setTimeout(() => reloadRef.current(), 1500);
+    };
+    const ch = db
+      .channel("my-sets")
+      .on("postgres_changes", { event: "*", schema: "public", table: "exercise_sets", filter: `user_id=eq.${userId}` }, refreshSoon)
+      .subscribe();
+    // Phones pause open apps; catch up when the app comes back to the screen.
+    let lastRefresh = Date.now();
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      pullRemoteTimer();
+      if (Date.now() - lastRefresh > 20000) {
+        lastRefresh = Date.now();
+        reloadRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      offTimer();
+      db.removeChannel(ch);
+      clearTimeout(soon);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [userId]);
 
   // Plan the alarm sound on the audio clock as soon as a timer starts, so it rings on time even
   // in a throttled background tab. Re-planned when the due time changes (snooze/restart/stop).

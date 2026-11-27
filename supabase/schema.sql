@@ -411,6 +411,13 @@ do $$ begin
   alter publication supabase_realtime add table public.workouts;
 exception when duplicate_object then null; end $$;
 
+-- ---------- Rest timer shared by your devices ----------
+-- Start a rest timer on the computer and your phone shows the same countdown, live.
+alter table public.reminders add column if not exists started_at timestamptz;
+do $$ begin
+  alter publication supabase_realtime add table public.reminders;
+exception when duplicate_object then null; end $$;
+
 -- ---------- Rest-timer push reminders (optional) ----------
 -- After deploying supabase/functions/send-reminders, schedule it every minute.
 -- Run this separately, with your project ref and the WEBHOOK_SECRET you chose:

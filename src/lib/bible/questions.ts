@@ -382,7 +382,41 @@ export async function nextCard(cats: Category[], opts: { versions: string[]; out
   const p = pick(pool);
   if (p === "book") return bookCard(opts.hebrewsWithPaul);
   if (p === "verse") return verseCard(pick(opts.versions.length ? opts.versions : ["KJV"]));
-  return p.kind === "mc" && (p.cat === "whosaid" || p.cat === "teachers") ? { ...p, choices: shuffle(p.choices!) } : p;
+  return p.kind === "mc" && (p.cat === "whosaid" || p.cat === "teachers") ? whoSaid(p, opts.outside) : p;
+}
+
+// ---------- "Who said it?" variety ----------
+// Bible speakers and pastors/authors share the choices (when outside questions are on), so you
+// have to tell Paul from a pastor. About a third of the time you type the name instead.
+const BIBLE_DECOYS = ["Paul", "Peter", "David", "Solomon", "Moses", "James", "John", "Jesus"];
+const OUTSIDE_DECOYS = ["John Bevere", "Josh Howerton", "Charlie Kirk", "C.S. Lewis", "Augustine", "Billy Graham"];
+
+/** Accepted typed answers: the name without notes in parentheses, plus a last name. */
+function nameAnswers(full: string): string[] {
+  const clean = full.replace(/\s*\(.*\)\s*/, "").trim();
+  const words = clean.split(" ");
+  const out = [clean];
+  if (/ the /.test(clean)) out.push(words[0]); // John the Baptist → John
+  else if (words.length > 1) out.push(words[words.length - 1]); // C.S. Lewis → Lewis
+  if (clean === "C.S. Lewis") out.push("CS Lewis");
+  return out;
+}
+
+function whoSaid(p: QCard, outside: boolean): QCard {
+  const answer = p.answers[0];
+  const text = `${p.quote ?? ""} ${p.prompt}`;
+  const fits = (name: string) => name !== answer && !text.includes(name.split(" ").pop()!); // don't offer someone the quote names
+  const fromBible = p.cat === "whosaid";
+  let wrong = (p.choices ?? []).filter((c) => c !== answer && fits(c));
+  if (outside) {
+    if (fromBible) wrong = [...shuffle(wrong).slice(0, 2), ...shuffle(OUTSIDE_DECOYS.filter(fits)).slice(0, 1)];
+    else if (p.id.startsWith("teach-")) wrong = [...shuffle(wrong).slice(0, 1), ...shuffle(BIBLE_DECOYS.filter(fits)).slice(0, 2)];
+  }
+  const typeable = answer.split(" ").length <= 3;
+  if (typeable && Math.random() < 0.35) {
+    return { ...p, kind: "text", prompt: p.cat === "teachers" && p.id.startsWith("teach-") ? "Who taught this? Type the name." : "Who said it? Type the name.", choices: undefined, answers: nameAnswers(answer) };
+  }
+  return { ...p, choices: shuffle([answer, ...wrong.slice(0, 3)]) };
 }
 
 export const CURATED_COUNT = CURATED.length;
