@@ -395,6 +395,11 @@ grant execute on function
   public.create_crew(text), public.join_crew(text)
   to authenticated;
 revoke execute on function public.create_crew(text), public.join_crew(text) from anon, public;
+-- The server functions (send-reminders, notify-crew) use the service role. It skips the
+-- row policies but still needs table access, which newer projects don't grant by default.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+alter default privileges in schema public grant select, insert, update, delete on tables to service_role;
 
 -- ---------- Realtime (in-app crew alerts) ----------
 -- Realtime respects the policies above, so you only hear about crewmates.
