@@ -15,7 +15,7 @@ export const CATEGORIES: { id: Category; label: string }[] = [
   { id: "truefalse", label: "True or false" },
   { id: "inbible", label: "Is it in the Bible?" },
   { id: "whosaid", label: "Who said it?" },
-  { id: "teachers", label: "Who taught it?" },
+  { id: "teachers", label: "Pastors & authors" },
   { id: "books", label: "Books" },
   { id: "verses", label: "Verses" },
   { id: "mine", label: "My cards" },
@@ -262,6 +262,10 @@ const WHO_SAID: [string, string, string, string[]][] = [
   ["Am I my brother's keeper?", "Cain", "Genesis 4:9", ["Esau", "Abel", "Joseph's brothers"]],
   ["The LORD gave, and the LORD hath taken away; blessed be the name of the LORD.", "Job", "Job 1:21", ["David", "Solomon", "Naomi"]],
   ["Lord, I believe; help thou mine unbelief.", "A father whose son needed healing", "Mark 9:24", ["Thomas", "Peter", "Nicodemus"]],
+];
+
+// Quotes from outside the Bible (the "Pastors & authors" category).
+const WHO_SAID_OUTSIDE: [string, string, string, string[]][] = [
   ["Aim at heaven and you will get earth thrown in.", "C.S. Lewis", "Mere Christianity (not the Bible)", ["Paul", "Jesus", "Solomon"]],
   ["Our heart is restless until it rests in you.", "Augustine", "Confessions, Book 1 (not the Bible)", ["David", "Paul", "C.S. Lewis"]],
   ["God helps those who help themselves.", "Benjamin Franklin (popularized)", "Poor Richard's Almanack, 1736 (not the Bible)", ["Solomon", "Paul", "James"]],
@@ -285,7 +289,7 @@ export const CURATED: QCard[] = [
   ...text("places", PLACES),
   ...text("numbers", NUMBERS),
   ...TRUE_FALSE.map(([s, t, ref, explain], i): QCard => ({ id: `tf-${i}`, cat: "truefalse", prompt: "True or false?", quote: s, kind: "tf", answers: [t ? "True" : "False"], ref, explain })),
-  ...ATTRIBUTIONS.map(([s, t, explain], i): QCard => ({ id: `attr-${i}`, cat: "truefalse", prompt: "True or false?", quote: s, kind: "tf", answers: [t ? "True" : "False"], explain })),
+  ...ATTRIBUTIONS.map(([s, t, explain], i): QCard => ({ id: `attr-${i}`, cat: "teachers", prompt: "True or false?", quote: s, kind: "tf", answers: [t ? "True" : "False"], explain })),
   ...IN_BIBLE.map(([s, yes, explain], i): QCard => ({
     id: `in-${i}`,
     cat: "inbible",
@@ -297,6 +301,7 @@ export const CURATED: QCard[] = [
     explain,
   })),
   ...WHO_SAID.map(([s, who, ref, wrong], i): QCard => ({ id: `who-${i}`, cat: "whosaid", prompt: "Who said it?", quote: s, kind: "mc", choices: shuffle([who, ...wrong]), answers: [who], ref })),
+  ...WHO_SAID_OUTSIDE.map(([s, who, ref, wrong], i): QCard => ({ id: `who-out-${i}`, cat: "teachers", prompt: "Who said it?", quote: s, kind: "mc", choices: shuffle([who, ...wrong]), answers: [who], ref })),
   ...TEACHER_CARDS,
 ];
 
@@ -358,21 +363,25 @@ async function verseCard(version: string): Promise<QCard> {
 }
 
 /** The next question for the chosen categories. Generated ones never run out. */
-export async function nextCard(cats: Category[], opts: { version: string; hebrewsWithPaul: boolean; custom: CustomCard[]; recent: Set<string> }): Promise<QCard> {
+export async function nextCard(cats: Category[], opts: { versions: string[]; outside: boolean; hebrewsWithPaul: boolean; custom: CustomCard[]; recent: Set<string> }): Promise<QCard> {
   const pool: (QCard | "book" | "verse")[] = [];
-  const use = (c: Category) => cats.length === 0 || cats.includes(c);
+  const use = (c: Category) => (cats.length === 0 || cats.includes(c)) && (opts.outside || c !== "teachers");
   for (const q of CURATED) if (use(q.cat) && !opts.recent.has(q.id)) pool.push(q);
   opts.custom.forEach((c, i) => use("mine") && !opts.recent.has(`mine-${i}`) && pool.push({ id: `mine-${i}`, cat: "mine", prompt: c.q, kind: "text", answers: split(c.a), explain: c.note }));
   // Generated questions get a fair share of the mix.
   if (use("books")) for (let i = 0; i < 25; i++) pool.push("book");
   if (use("verses")) for (let i = 0; i < 40; i++) pool.push("verse");
   if (!pool.length) {
-    opts.recent.clear();
-    return nextCard(cats, opts);
+    // Every card here was asked recently: start over. Nothing at all to ask: ask anything.
+    if (opts.recent.size) {
+      opts.recent.clear();
+      return nextCard(cats, opts);
+    }
+    return nextCard([], opts);
   }
   const p = pick(pool);
   if (p === "book") return bookCard(opts.hebrewsWithPaul);
-  if (p === "verse") return verseCard(opts.version);
+  if (p === "verse") return verseCard(pick(opts.versions.length ? opts.versions : ["KJV"]));
   return p.kind === "mc" && (p.cat === "whosaid" || p.cat === "teachers") ? { ...p, choices: shuffle(p.choices!) } : p;
 }
 

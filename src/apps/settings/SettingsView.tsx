@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabase";
 import { getUsdaKey, setUsdaKey } from "../../lib/nutrition";
 import { chime, primeAudio, testAlarm } from "../../lib/alarm";
 import { getPhoneShortcut, setPhoneShortcut, startPhoneTimer } from "../../lib/timer";
+import { QuestionSettings } from "../bible/QuestionSettings";
 
 type AnyRow = Record<string, unknown> & { id?: string };
 const noId = ({ id: _id, ...r }: AnyRow) => r;
@@ -287,6 +288,12 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
           </button>
         </div>
       )}
+
+      <section className="card">
+        <h2>Bible questions</h2>
+        <p className="muted small">Used by the Bible Challenge and “Name that verse.” Changes save right away.</p>
+        <QuestionSettings data={data} />
+      </section>
 
       <section className="card">
         <h2>Data</h2>

@@ -272,6 +272,10 @@ export interface Settings {
     /** Days of the week the reading goal applies (0 = Sunday). */
     days: number[];
     customCards: CustomCard[];
+    /** Bundled versions that verse questions draw from (Easy “Which version?” picks among them). */
+    quizVersions: string[];
+    /** Include questions about pastors and authors (outside the Bible). */
+    outsideQuestions: boolean;
   };
 }
 
@@ -316,6 +320,8 @@ export const DEFAULT_SETTINGS: Settings = {
     since: "",
     days: [0, 1, 2, 3, 4, 5, 6],
     customCards: [],
+    quizVersions: ["KJV", "BSB", "AKJV", "ASV", "YLT", "BBE"],
+    outsideQuestions: true,
   },
 };
 

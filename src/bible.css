@@ -145,6 +145,12 @@
 .w-missing { color: var(--bad); text-decoration: underline wavy; }
 .w-extra { color: var(--muted); text-decoration: line-through; }
 
+/* Question settings */
+.warn-note { color: var(--close); font-weight: 600; }
+.stack.tight h3 { margin: 0; }
+.q-settings summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
+.q-settings[open] summary { margin-bottom: 10px; }
+
 /* Challenge */
 .quiz-card { min-height: 260px; }
 .quiz-q { font-size: 1.25rem; margin-top: 4px; }

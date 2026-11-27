@@ -4,7 +4,7 @@ import type { Data } from "../../lib/useData";
 import type { CustomCard } from "../../lib/types";
 import { CATEGORIES, CURATED_COUNT, nextCard, type Category, type QCard } from "../../lib/bible/questions";
 import { gradeAnswer, type Grade } from "../../lib/bible/compare";
-import { BUNDLED } from "../../lib/bible/text";
+import { QuestionSettings, quizVersions } from "./QuestionSettings";
 import { Modal } from "../../components/Modal";
 
 interface Tally {
@@ -39,7 +39,8 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
   const [err, setErr] = useState<string | null>(null);
   const [cardsOpen, setCardsOpen] = useState(false);
   const recent = useRef(new Set<string>());
-  const version = BUNDLED.includes(data.settings.bible.version) ? data.settings.bible.version : "KJV";
+  const versions = quizVersions(data);
+  const outside = data.settings.bible.outsideQuestions;
 
   const next = () => {
     setCard(null);
@@ -47,7 +48,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
     setResult(null);
     setRevealed(false);
     setErr(null);
-    nextCard(cats, { version, hebrewsWithPaul: data.settings.bible.hebrewsWithPaul, custom: data.settings.bible.customCards, recent: recent.current }).then(
+    nextCard(cats, { versions, outside, hebrewsWithPaul: data.settings.bible.hebrewsWithPaul, custom: data.settings.bible.customCards, recent: recent.current }).then(
       (c) => {
         recent.current.add(c.id);
         if (recent.current.size > 150) recent.current.delete(recent.current.values().next().value!);
@@ -57,6 +58,11 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
     );
   };
   useEffect(next, [cats]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Turning off outside-the-Bible questions drops that category from the selection.
+  useEffect(() => {
+    if (!outside && cats.includes("teachers")) setCats(cats.filter((c) => c !== "teachers"));
+    else if (!outside && card?.cat === "teachers") next();
+  }, [outside]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function record(grade: Grade, picked?: string) {
     setResult({ grade, picked });
@@ -92,7 +98,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
         <button className={`chip ${cats.length === 0 ? "on" : ""}`} onClick={() => setCats([])}>
           Everything
         </button>
-        {CATEGORIES.filter((c) => c.id !== "mine" || data.settings.bible.customCards.length).map((c) => (
+        {CATEGORIES.filter((c) => (c.id !== "mine" || data.settings.bible.customCards.length) && (c.id !== "teachers" || outside)).map((c) => (
           <button key={c.id} className={`chip ${cats.includes(c.id) ? "on" : ""}`} onClick={() => toggle(c.id)}>
             {c.label}
           </button>
@@ -102,6 +108,12 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
         {CURATED_COUNT} hand-written questions + unlimited ones built from the Bible text · Session {session.right}/{session.total}
         {session.streak > 1 ? ` · 🔥 ${session.streak} in a row` : ""} · All time {stats.right}/{stats.total} (best streak {stats.best})
       </p>
+      <details className="q-settings">
+        <summary>
+          Question settings: {versions.join(", ")} · {outside ? "includes pastors & authors" : "the Bible only"}
+        </summary>
+        <QuestionSettings data={data} />
+      </details>
 
       <section className="card quiz-card">
         {err && <p className="error-text">{err}</p>}

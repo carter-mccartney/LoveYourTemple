@@ -4,7 +4,8 @@ import type { Data } from "../../lib/useData";
 import type { MemoryVerse, NewMemoryVerse } from "../../lib/types";
 import { addDays, dayKey } from "../../lib/dates";
 import { BOOKS, book, fmtRef, parseRef, type Book } from "../../lib/bible/canon";
-import { BUNDLED, VERSIONS, getVersionKey, loadBook, passageText, setVersionKey, versionInfo } from "../../lib/bible/text";
+import { VERSIONS, getVersionKey, loadBook, passageText, setVersionKey, versionInfo } from "../../lib/bible/text";
+import { VersionPicker, quizVersions } from "./QuestionSettings";
 import { firstLetters, gradeVerse, type Grade, type WordDiff } from "../../lib/bible/compare";
 import { shuffle } from "../../lib/bible/questions";
 import { Modal } from "../../components/Modal";
@@ -335,7 +336,7 @@ interface Puzzle {
   answer: string;
 }
 
-async function makePuzzle(level: Level, source: "deck" | "bible", data: Data): Promise<Puzzle> {
+async function makePuzzle(level: Level, source: "deck" | "bible", data: Data, versions: string[]): Promise<Puzzle> {
   let b: Book, chapter: number, verse: number, text: string, version: string;
   const deck = data.memory_verses;
   if (source === "deck" && deck.length) {
@@ -347,16 +348,17 @@ async function makePuzzle(level: Level, source: "deck" | "bible", data: Data): P
     version = v.version;
   } else {
     b = BOOKS[Math.floor(Math.random() * 66)];
-    version = level === "easy" ? BUNDLED[Math.floor(Math.random() * BUNDLED.length)] : BUNDLED.includes(data.settings.bible.version) ? data.settings.bible.version : "KJV";
+    version = versions[Math.floor(Math.random() * versions.length)];
     const chapters = await loadBook(version, b.n);
     chapter = 1 + Math.floor(Math.random() * chapters.length);
     const vs = chapters[chapter - 1];
     verse = 1 + Math.floor(Math.random() * vs.length);
     text = vs[verse - 1];
-    if (!text) return makePuzzle(level, source, data); // a verse this translation omits
+    if (!text) return makePuzzle(level, source, data, versions); // a verse this translation omits
   }
   if (level === "easy") {
-    const others = shuffle([...new Set([...BUNDLED, ...deck.map((v) => v.version)])].filter((x) => x !== version)).slice(0, 3);
+    // Choices are the versions you've turned on (just one if only one is on — your call).
+    const others = shuffle(versions.filter((x) => x !== version)).slice(0, 3);
     return { text, version, b, chapter, verse, choices: shuffle([version, ...others]), answer: version };
   }
   if (level === "normal") {
@@ -380,9 +382,10 @@ function NameThatVerse({ data }: { data: Data }) {
     setPicked(null);
     setTyped("");
     setErr(null);
-    makePuzzle(level, source, data).then(setP, (e) => setErr((e as Error).message));
+    makePuzzle(level, source, data, versions).then(setP, (e) => setErr((e as Error).message));
   };
-  useEffect(load, [level, source]); // eslint-disable-line react-hooks/exhaustive-deps
+  const versions = quizVersions(data);
+  useEffect(load, [level, source, versions.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answer = (a: string) => {
     if (!p || picked) return;
@@ -416,6 +419,10 @@ function NameThatVerse({ data }: { data: Data }) {
           </option>
         </select>
       </div>
+      <details className="q-settings">
+        <summary>Versions in questions: {versions.join(", ")}</summary>
+        <VersionPicker data={data} />
+      </details>
       <p className="muted small">
         Score this session: {score.right} / {score.total}
       </p>
