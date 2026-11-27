@@ -23,8 +23,8 @@ Check items off as you go. Secrets come from your private secrets file (outside 
 - [x] Settings → **Import CSV / JSON** → `exports/loveyourtemple-import.json` (**once only** — importing twice duplicates sets).
 
 ## 3. Database updates (SQL Editor → run each block)
-- [ ] Access for signed-in users — the "Table access for signed-in users" block in `supabase/schema.sql` (skip if already run).
-- [ ] Repeat reminders:
+- [x] Access for signed-in users — the "Table access for signed-in users" block in `supabase/schema.sql` (skip if already run).
+- [x] Repeat reminders:
 ```sql
 alter table public.reminders
   add column if not exists exercise text,
@@ -35,12 +35,14 @@ alter table public.reminders
   add column if not exists last_sent_at timestamptz;
 ```
 
-- [ ] Bible section — run the “Bible reading, memory verses, other books” block from `supabase/schema.sql` (creates 4 tables; safe to re-run). Until then the Bible tab shows a yellow reminder and can't save to your account.
+- [x] Bible section — run the “Bible reading, memory verses, other books” block from `supabase/schema.sql` (creates 4 tables; safe to re-run). Until then the Bible tab shows a yellow reminder and can't save to your account.
+
+- [x] Server functions' table access (service_role grants, in schema.sql since Nov 27).
 
 ## 4. Closed-app notifications
-- [ ] Edge Functions → Secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `WEBHOOK_SECRET`, `VAPID_SUBJECT` (= `mailto:` + your Gmail).
-- [ ] Edge Functions → Deploy a new function → Via Editor → name `send-reminders` → paste `supabase/functions/send-reminders/index.ts` → Deploy → turn **off** Verify JWT.
-- [ ] Run every minute (put your WEBHOOK_SECRET in):
+- [x] Edge Functions → Secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `WEBHOOK_SECRET`, `VAPID_SUBJECT` (= `mailto:` + your Gmail).
+- [x] Edge Functions → Deploy a new function → Via Editor → name `send-reminders` → paste `supabase/functions/send-reminders/index.ts` → Deploy → turn **off** Verify JWT.
+- [x] Run every minute (put your WEBHOOK_SECRET in):
 ```sql
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
@@ -51,8 +53,8 @@ select cron.schedule('send-reminders', '* * * * *', $$
   );
 $$);
 ```
-- [ ] Test: Settings → Minutes between sets = 1 → log a set → close the tab → a notification arrives within ~2 min. Set it back to 30.
-- [ ] Windows: Edge/Chrome → Settings → System → allow running in the background.
+- [x] Test: Settings → Minutes between sets = 1 → log a set → close the tab → a notification arrives within ~2 min. Set it back to 30.
+- [x] Windows: Edge/Chrome → Settings → System → allow running in the background.
 
 ## 5. Phone
 - [x] Safari → live site → Share → **Add to Home Screen** → open from the home screen → sign in with password → turn on notifications.
