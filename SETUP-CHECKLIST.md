@@ -39,7 +39,7 @@ alter table public.reminders
 
 - [x] Server functions' table access (service_role grants, in schema.sql since Nov 27).
 
-- [ ] Shared rest timer, iPhone "timer started" push, and Bible Challenge answers on all devices (Nov 27): run the block from `-- ---------- Rest timer shared by your devices ----------` through the `quiz_answers` grant in `supabase/schema.sql` (safe to re-run). Then re-deploy `send-reminders` (Edge Functions → send-reminders → Code → paste the new `supabase/functions/send-reminders/index.ts` → Deploy).
+- [x] Shared rest timer, iPhone "timer started" push, and Bible Challenge answers on all devices (Nov 27): run the block from `-- ---------- Rest timer shared by your devices ----------` through the `quiz_answers` grant in `supabase/schema.sql` (safe to re-run). Then re-deploy `send-reminders` (Edge Functions → send-reminders → Code → paste the new `supabase/functions/send-reminders/index.ts` → Deploy).
 
 ## 4. Closed-app notifications
 - [x] Edge Functions → Secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `WEBHOOK_SECRET`, `VAPID_SUBJECT` (= `mailto:` + your Gmail).
@@ -60,7 +60,7 @@ $$);
 
 ## 5. Phone
 - [x] Safari → live site → Share → **Add to Home Screen** → open from the home screen → sign in with password → turn on notifications.
-- [ ] Optional: Settings → "Also start a timer in the iPhone Clock app" (Shortcuts setup; Start Timer duration = Shortcut Input, in seconds).
+- [x] Optional: Settings → "Also start a timer in the iPhone Clock app" (Shortcuts setup; Start Timer duration = Shortcut Input, in seconds).
 
 ## 6. Crew alerts (later, when your wife / buddy join)
 - [ ] Deploy `notify-crew` the same way as `send-reminders` (Verify JWT off).
