@@ -15,8 +15,9 @@ self.addEventListener("activate", (e) =>
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  // Pages: always ask the server (skipping the 10-minute browser cache), so a new version shows on reload.
   e.respondWith(
-    fetch(req)
+    fetch(req, req.mode === "navigate" ? { cache: "no-cache" } : undefined)
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));

@@ -98,6 +98,7 @@ async function syncRemote(t: RestTimer | null, announce = false) {
     for (const row of [shared, { ...full, started_at }, full, base]) {
       const { error } = await supabase.from("reminders").upsert(row);
       if (!error) break;
+      console.warn("Rest timer: saving with", Object.keys(row).length, "columns failed:", error.message);
     }
   } catch {
     /* in-app alert still works */

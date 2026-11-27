@@ -334,6 +334,9 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
           </button>
         </details>
       </section>
+      <p className="hint" style={{ textAlign: "center" }}>
+        App version: {new Date(__BUILD_TIME__).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+      </p>
     </div>
   );
 }
