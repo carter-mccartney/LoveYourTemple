@@ -4,7 +4,8 @@ import type { Data } from "../../lib/useData";
 import type { Settings, WorkoutSet } from "../../lib/types";
 import { atTime, dayKey, fmtDuration, fmtTime, minutesBetween } from "../../lib/dates";
 import { habitSets, records, restMinutes, todayPlan, weekTable } from "../../lib/stats";
-import { addMinutes, enableAlerts, getPhoneShortcut, getTimer, notificationsAllowed, startPhoneTimer, startTimer, stopTimer, useRestTimer } from "../../lib/timer";import { Stat } from "../../components/Stat";
+import { addMinutes, enableAlerts, getPhoneShortcut, getTimer, notificationsAllowed, startPhoneTimer, startTimer, stopTimer, useRestTimer } from "../../lib/timer";
+import { Stat } from "../../components/Stat";
 import { WeekTable } from "../../components/WeekTable";
 
 export function useNow(ms: number) {
@@ -49,13 +50,17 @@ export async function logHabitSet(data: Data, toast: (t: Toast) => void, exercis
   const added = await data.insert("sets", [{ performed_at: new Date().toISOString(), exercise, reps, notes, workout_id: null }]);
   if (!added) return false;
   navigator.vibrate?.(30);
-  const timed = data.settings.autoTimer && timerFits(data.settings);
-  if (timed) {
+  // "Only during work hours": no automatic timer after work, but one tap still starts it.
+  const offHours = data.settings.autoTimer && !timerFits(data.settings);
+  const timed = data.settings.autoTimer && !offHours;
+  const start = () => {
     startRest(data, exercise, reps, reps);
     startPhoneTimer(); // iPhone Clock timer, if set up on this device
-  } else if (getTimer()) stopTimer(); // set done; stop any running reminder
+  };
+  if (timed) start();
+  else if (getTimer()) stopTimer(); // set done; stop any running reminder
   toast({
-    msg: `Logged ${reps} ${exercise}${timed ? ` · next set in ${data.settings.intervalMin} min` : ` at ${fmtTime(new Date())}`}`,
+    msg: `Logged ${reps} ${exercise}${timed ? ` · next set in ${data.settings.intervalMin} min` : ` at ${fmtTime(new Date())}${offHours ? " · no timer outside work hours" : ""}`}`,
     action: {
       label: "Undo",
       run: () => {
@@ -63,6 +68,7 @@ export async function logHabitSet(data: Data, toast: (t: Toast) => void, exercis
         if (timed) stopTimer();
       },
     },
+    action2: offHours ? { label: "Start timer", run: start } : undefined,
   });
   return true;
 }

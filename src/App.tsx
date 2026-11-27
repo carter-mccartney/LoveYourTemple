@@ -6,9 +6,9 @@ import { useData } from "./lib/useData";
 import type { NewGoal, NewSet, Settings } from "./lib/types";
 import { go, useRoute } from "./lib/router";
 import { myCrews, notify, subscribeCrew } from "./lib/crew";
-import { addMinutes, ensurePushRegistered, getTimer, markFired, pullRemoteTimer, setReminderPrefs, setTimerUser, showTimerNotification, useRestTimer, watchRemoteTimer } from "./lib/timer";
+import { addMinutes, autoPhoneTimer, ensurePushRegistered, getPhoneShortcut, getTimer, markFired, pullRemoteTimer, setReminderPrefs, setTimerUser, showTimerNotification, startPhoneTimer, syncPhoneAlerts, useRestTimer, watchRemoteTimer } from "./lib/timer";
 import { alarmPlannedFor, cancelAlarm, chime, primeAudio, scheduleAlarm, stopRinging } from "./lib/alarm";
-import { logHabitSet, nextReps } from "./apps/pushups/Today";
+import { fmtCountdown, logHabitSet, nextReps } from "./apps/pushups/Today";
 import { SignIn } from "./components/SignIn";
 import { Home } from "./apps/home/Home";
 import { PushupsApp } from "./apps/pushups/PushupsApp";
@@ -48,6 +48,7 @@ interface ExcelHistory {
 export interface Toast {
   msg: string;
   action?: { label: string; run: () => void };
+  action2?: { label: string; run: () => void };
 }
 
 export default function App() {
@@ -90,7 +91,7 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
   const { alarmSeconds, remindAgainMin, remindAgainTimes, intervalMin } = data.settings;
   useEffect(() => {
     setTimerUser(userId ?? null);
-    if (userId) ensurePushRegistered(userId);
+    if (userId) ensurePushRegistered(userId).then(syncPhoneAlerts);
   }, [userId]);
   useEffect(() => {
     setReminderPrefs({ remindAgainMin, remindAgainTimes, intervalMin });
@@ -169,12 +170,21 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
         setToast({ msg: "Snoozed 5 minutes" });
       } else if (action === "log") {
         logHabitSet(d, setToast, ex, getTimer()?.reps ?? nextReps(d, ex));
+      } else if (action === "phone") {
+        // Tapped "Rest timer started" on the iPhone: start its Clock timer for the time left.
+        pullRemoteTimer().then(() => {
+          const t = getTimer();
+          if (!t || t.dueAt <= Date.now()) return setToast({ msg: "That rest timer is already over" });
+          autoPhoneTimer();
+          if (getPhoneShortcut())
+            setToast({ msg: `Next set in ${fmtCountdown((t.dueAt - Date.now()) / 60000)}`, action: { label: "Start Clock timer", run: () => startPhoneTimer() } });
+        });
       }
     },
     [setToast],
   );
 
-  // The app was opened by a notification button while closed: #/pushups/do-log or #/pushups/do-snooze.
+  // The app was opened by a notification (button) while closed: #/pushups/do-log, do-snooze or do-phone.
   const pending = route[0] === "pushups" && route[1]?.startsWith("do-") ? route[1].slice(3) : null;
   useEffect(() => {
     if (!pending || data.loading) return;
@@ -345,6 +355,17 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
               }}
             >
               {toast.action.label}
+            </button>
+          )}
+          {toast.action2 && (
+            <button
+              className="link"
+              onClick={() => {
+                toast.action2!.run();
+                setToastState(null);
+              }}
+            >
+              {toast.action2.label}
             </button>
           )}
         </div>

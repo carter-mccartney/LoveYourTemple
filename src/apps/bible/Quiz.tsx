@@ -6,6 +6,7 @@ import { CATEGORIES, CURATED_COUNT, nextCard, type Category, type QCard } from "
 import { gradeAnswer, type Grade } from "../../lib/bible/compare";
 import { QuestionSettings, quizVersions } from "./QuestionSettings";
 import { Modal } from "../../components/Modal";
+import { addAnswer, clearHistory, historySynced, loadHistory, regradeLast, syncHistory } from "../../lib/bible/history";
 
 interface Tally {
   right: number;
@@ -20,35 +21,6 @@ const loadStats = (): Tally => {
     return { right: 0, total: 0, best: 0 };
   }
 };
-// Every answer, newest last (kept on this device, last 1,000).
-interface Answered {
-  at: number;
-  cat: Category;
-  prompt: string;
-  quote?: string;
-  given: string;
-  answer: string;
-  grade: Grade;
-  ref?: string;
-  explain?: string;
-  link?: string;
-}
-const HISTORY_KEY = "lyt.quiz.history";
-const loadHistory = (): Answered[] => {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
-};
-const saveHistory = (h: Answered[]) => {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(-1000)));
-  } catch {
-    /* ignore */
-  }
-};
-
 const saveStats = (t: Tally) => {
   try {
     localStorage.setItem(STATS_KEY, JSON.stringify(t));
@@ -99,7 +71,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
     if (card) {
       const given = picked ?? (typed.trim() || "(shown the answer)");
       const { cat, prompt, quote, answers, ref, explain, link } = card;
-      saveHistory([...loadHistory(), { at: Date.now(), cat, prompt, quote, given, answer: answers[0], grade, ref, explain, link }]);
+      addAnswer({ at: Date.now(), cat, prompt, quote, given, answer: answers[0], grade, ref, explain, link });
     }
     const ok = grade === "right";
     setSession((s) => {
@@ -113,8 +85,7 @@ export function BibleQuiz({ data, toast }: { data: Data; toast: (t: Toast) => vo
   /** "Close" answers: you decide whether it counts. */
   function overrule(ok: boolean) {
     setResult({ grade: ok ? "right" : "wrong" });
-    const h = loadHistory();
-    if (h.length) saveHistory([...h.slice(0, -1), { ...h[h.length - 1], grade: ok ? "right" : "wrong" }]);
+    regradeLast(ok ? "right" : "wrong");
     if (ok) {
       setSession((s) => ({ ...s, right: s.right + 1, streak: s.streak + 1 }));
       const t = { ...stats, right: stats.right + 1 };
@@ -337,6 +308,15 @@ const GRADE_LABEL: Record<Grade, string> = { right: "Right", close: "Close", wro
 /** Your past answers, with how you're doing in each category. */
 function History({ onClose }: { onClose: () => void }) {
   const [all, setAll] = useState(loadHistory);
+  const [synced, setSynced] = useState(false);
+  useEffect(() => {
+    let live = true;
+    syncHistory().then((h) => live && setAll(h));
+    historySynced().then((s) => live && setSynced(s));
+    return () => {
+      live = false;
+    };
+  }, []);
   const [show, setShow] = useState<"all" | "wrong" | "right">("all");
   const [cat, setCat] = useState<Category | "">("");
   const [limit, setLimit] = useState(50);
@@ -356,7 +336,8 @@ function History({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <p className="hint" style={{ marginTop: 0 }}>
-              How you're doing by category. Tap one to see just those answers.
+              How you're doing by category. Tap one to see just those answers.{" "}
+              {synced ? "Includes answers from all your devices." : "Kept on this device — sign in to see them on all your devices."}
             </p>
             <table className="table">
               <tbody>
@@ -395,7 +376,7 @@ function History({ onClose }: { onClose: () => void }) {
             </div>
             <div className="history-list">
               {rows.slice(0, limit).map((a) => (
-                <div key={a.at} className={`history-item h-${a.grade}`}>
+                <div key={a.id} className={`history-item h-${a.grade}`}>
                   <div className="row">
                     <span className="eyebrow grow">
                       {CATEGORIES.find((c) => c.id === a.cat)?.label} · {when(a.at)}
@@ -438,8 +419,8 @@ function History({ onClose }: { onClose: () => void }) {
             <button
               className="btn"
               onClick={() => {
-                if (!confirm("Clear your answer history on this device?")) return;
-                saveHistory([]);
+                if (!confirm(synced ? "Clear your answer history on all your devices?" : "Clear your answer history on this device?")) return;
+                clearHistory();
                 setAll([]);
               }}
             >

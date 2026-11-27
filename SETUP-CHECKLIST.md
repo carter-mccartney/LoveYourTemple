@@ -39,13 +39,7 @@ alter table public.reminders
 
 - [x] Server functions' table access (service_role grants, in schema.sql since Nov 27).
 
-- [ ] Rest timer shared between devices (Nov 27):
-```sql
-alter table public.reminders add column if not exists started_at timestamptz;
-do $$ begin
-  alter publication supabase_realtime add table public.reminders;
-exception when duplicate_object then null; end $$;
-```
+- [ ] Shared rest timer, iPhone "timer started" push, and Bible Challenge answers on all devices (Nov 27): run the block from `-- ---------- Rest timer shared by your devices ----------` through the `quiz_answers` grant in `supabase/schema.sql` (safe to re-run). Then re-deploy `send-reminders` (Edge Functions → send-reminders → Code → paste the new `supabase/functions/send-reminders/index.ts` → Deploy).
 
 ## 4. Closed-app notifications
 - [x] Edge Functions → Secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `WEBHOOK_SECRET`, `VAPID_SUBJECT` (= `mailto:` + your Gmail).

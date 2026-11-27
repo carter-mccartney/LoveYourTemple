@@ -7,7 +7,7 @@ import { csvToSets, download, setsToCsv } from "../../lib/csv";
 import { supabase } from "../../lib/supabase";
 import { getUsdaKey, setUsdaKey } from "../../lib/nutrition";
 import { chime, primeAudio, testAlarm } from "../../lib/alarm";
-import { getPhoneShortcut, setPhoneShortcut, startPhoneTimer } from "../../lib/timer";
+import { getPhoneAuto, getPhoneShortcut, setPhoneAuto, setPhoneShortcut, startPhoneTimer, syncPhoneAlerts } from "../../lib/timer";
 import { QuestionSettings } from "../bible/QuestionSettings";
 
 type AnyRow = Record<string, unknown> & { id?: string };
@@ -140,7 +140,7 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
           </label>
           <label className="check block">
             <input type="checkbox" checked={s.timerWorkHoursOnly} onChange={(e) => set("timerWorkHoursOnly", e.target.checked)} disabled={!s.autoTimer} /> Only
-            during work hours on workdays
+            during work hours on workdays (after hours, the “Logged” message has a Start timer button)
           </label>
         </div>
         <h3 style={{ marginTop: 16 }}>When the timer ends</h3>
@@ -391,6 +391,7 @@ function PasswordBox({ toast }: { toast: (t: Toast) => void }) {
 function PhoneShortcut({ toast }: { toast: (t: Toast) => void }) {
   const [name, setName] = useState(getPhoneShortcut);
   const [saved, setSaved] = useState(getPhoneShortcut);
+  const [auto, setAuto] = useState(getPhoneAuto);
   const isApple = /iPhone|iPad|Macintosh/.test(navigator.userAgent);
   if (!isApple && !saved) return null;
   return (
@@ -420,6 +421,7 @@ function PhoneShortcut({ toast }: { toast: (t: Toast) => void }) {
           onClick={() => {
             setPhoneShortcut(name.trim());
             setSaved(name.trim());
+            syncPhoneAlerts();
             toast({ msg: name.trim() ? "Saved. Logging a daily set will also start your Clock timer." : "Clock timer turned off" });
           }}
         >
@@ -431,6 +433,20 @@ function PhoneShortcut({ toast }: { toast: (t: Toast) => void }) {
           </button>
         )}
       </div>
+      {saved && (
+        <label className="check block" style={{ marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={auto}
+            onChange={(e) => {
+              setAuto(e.target.checked);
+              setPhoneAuto(e.target.checked);
+            }}
+          />{" "}
+          Also when I log a set on my computer: this iPhone gets a “Rest timer started” notification — tap it (or just open the app) and the Clock
+          timer starts with the time that's left. iPhone doesn't let it start on its own while the app is closed.
+        </label>
+      )}
     </details>
   );
 }

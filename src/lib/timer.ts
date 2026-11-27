@@ -63,7 +63,18 @@ let prefs = { remindAgainMin: 0, remindAgainTimes: 0, intervalMin: 30 };
 export const setTimerUser = (id: string | null) => (remoteUser = id);
 export const setReminderPrefs = (p: typeof prefs) => (prefs = p);
 
-async function syncRemote(t: RestTimer | null) {
+/** This device's push address, so a "timer started" push skips the device that started it. */
+async function myEndpoint(): Promise<string | null> {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    return (await reg?.pushManager?.getSubscription())?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `announce`: a new timer — tell your iPhone (see "timer started" in send-reminders). */
+async function syncRemote(t: RestTimer | null, announce = false) {
   if (!supabase || !remoteUser) return;
   try {
     if (!t) {
@@ -83,7 +94,8 @@ async function syncRemote(t: RestTimer | null) {
       last_sent_at: null,
     };
     // Older databases lack newer columns: drop them one step at a time so the reminder still saves.
-    for (const row of [{ ...full, started_at }, full, base]) {
+    const shared = { ...full, started_at, announce, from_endpoint: announce ? await myEndpoint() : null };
+    for (const row of [shared, { ...full, started_at }, full, base]) {
       const { error } = await supabase.from("reminders").upsert(row);
       if (!error) break;
     }
@@ -120,9 +132,11 @@ export async function pullRemoteTimer() {
     if (state && !state.fired) set(null);
     return;
   }
-  if (state && Math.abs(state.dueAt - dueAt) < 1500) return; // already the same
-  const startedAt = row.started_at ? Date.parse(row.started_at) : dueAt - prefs.intervalMin * 60000;
-  set({ startedAt, dueAt, body: row.body, fired: dueAt <= Date.now(), exercise: row.exercise ?? undefined, reps: row.reps ?? undefined });
+  if (!state || Math.abs(state.dueAt - dueAt) >= 1500) {
+    const startedAt = row.started_at ? Date.parse(row.started_at) : dueAt - prefs.intervalMin * 60000;
+    set({ startedAt, dueAt, body: row.body, fired: dueAt <= Date.now(), exercise: row.exercise ?? undefined, reps: row.reps ?? undefined });
+  }
+  autoPhoneTimer();
 }
 
 /** Live updates while the app is open. Returns a function that stops listening. */
@@ -143,7 +157,8 @@ export function startTimer(minutes: number, body: string, next?: { exercise: str
   const now = Date.now();
   const t: RestTimer = { startedAt: now, dueAt: now + minutes * 60000, body, fired: false, ...next };
   set(t);
-  syncRemote(t);
+  setPhoneRanFor(now); // started here: this device decides about its own Clock timer
+  syncRemote(t, true);
 }
 
 export function addMinutes(minutes: number) {
@@ -233,8 +248,69 @@ export const setPhoneShortcut = (name: string) => {
 export function startPhoneTimer() {
   const name = getPhoneShortcut();
   if (!name) return false;
+  if (state) setPhoneRanFor(state.startedAt);
   const left = state && state.dueAt > Date.now() ? (state.dueAt - Date.now()) / 1000 : prefs.intervalMin * 60;
   const seconds = Math.max(1, Math.round(left));
   window.location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=text&text=${seconds}`;
   return true;
+}
+
+// Timers started on another device (e.g. a set logged on the computer). iPhone won't let a
+// website or another device start a Shortcut in the background, so this happens the moment
+// this app is on screen: opened, switched back to, or opened from the "timer started" push.
+
+const AUTO_KEY = "lyt.phoneShortcut.remote";
+const RAN_KEY = "lyt.phoneShortcut.ranFor";
+/** Start the Clock timer for timers started on your other devices (default on). */
+export const getPhoneAuto = () => {
+  try {
+    return localStorage.getItem(AUTO_KEY) !== "0";
+  } catch {
+    return true;
+  }
+};
+const ranFor = () => {
+  try {
+    return Number(localStorage.getItem(RAN_KEY) ?? 0);
+  } catch {
+    return 0;
+  }
+};
+function setPhoneRanFor(startedAt: number) {
+  try {
+    localStorage.setItem(RAN_KEY, String(Math.round(startedAt)));
+  } catch {
+    /* ignore */
+  }
+}
+/** Whether this device already started (or chose not to start) its Clock timer for the current rest. */
+export const phoneTimerStarted = () => !!state && Math.abs(ranFor() - state.startedAt) < 1500;
+
+/** On this iPhone, start the Clock timer for a rest timer started elsewhere — once per timer. */
+export function autoPhoneTimer() {
+  if (!getPhoneShortcut() || !getPhoneAuto() || !state || state.fired) return false;
+  if (state.dueAt - Date.now() < 15000 || phoneTimerStarted() || document.visibilityState !== "visible") return false;
+  return startPhoneTimer();
+}
+
+/**
+ * Save the iPhone options, and tell the server whether this device wants a push when a
+ * timer starts on another device (only devices with a Shortcut set up get one).
+ */
+export async function setPhoneAuto(on: boolean) {
+  try {
+    localStorage.setItem(AUTO_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+  await syncPhoneAlerts();
+}
+export async function syncPhoneAlerts() {
+  if (!supabase || !remoteUser) return;
+  const endpoint = await myEndpoint();
+  if (!endpoint) return;
+  await supabase
+    .from("push_subscriptions")
+    .update({ timer_start: !!getPhoneShortcut() && getPhoneAuto() })
+    .eq("endpoint", endpoint);
 }

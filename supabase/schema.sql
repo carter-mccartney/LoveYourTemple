@@ -417,6 +417,32 @@ alter table public.reminders add column if not exists started_at timestamptz;
 do $$ begin
   alter publication supabase_realtime add table public.reminders;
 exception when duplicate_object then null; end $$;
+-- "Rest timer started" push to your iPhone, so its Clock timer can start too.
+alter table public.reminders
+  add column if not exists announce boolean not null default false,
+  add column if not exists from_endpoint text;
+alter table public.push_subscriptions add column if not exists timer_start boolean not null default false;
+
+-- ---------- Bible Challenge answers (your history on all your devices) ----------
+create table if not exists public.quiz_answers (
+  id uuid primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  answered_at timestamptz not null default now(),
+  cat text not null,
+  prompt text not null,
+  quote text,
+  given text not null,
+  answer text not null,
+  grade text not null,
+  ref text,
+  explain text,
+  link text
+);
+create index if not exists quiz_answers_user on public.quiz_answers (user_id, answered_at desc);
+alter table public.quiz_answers enable row level security;
+drop policy if exists "own only" on public.quiz_answers;
+create policy "own only" on public.quiz_answers for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update, delete on public.quiz_answers to authenticated, service_role;
 
 -- ---------- Rest-timer push reminders (optional) ----------
 -- After deploying supabase/functions/send-reminders, schedule it every minute.
