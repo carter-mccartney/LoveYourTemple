@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { COLLECTIONS, type DataStore } from "./store";
+import { COLLECTIONS, OPTIONAL, type DataStore } from "./store";
 import { DEFAULT_SETTINGS, type CollectionName, type NewRow, type Row, type Settings } from "./types";
 
 type State = { [K in CollectionName]: Row<K>[] };
-const EMPTY: State = { sets: [], goals: [], workouts: [], foods: [], food_logs: [], measurements: [] };
+const EMPTY: State = { sets: [], goals: [], workouts: [], foods: [], food_logs: [], measurements: [], bible_reads: [], memory_verses: [], reading_books: [], book_reads: [] };
 
 /** Newest-first ordering per collection, so views can take the head of a list. */
 const ORDER: { [K in CollectionName]: (a: Row<K>, b: Row<K>) => number } = {
@@ -13,6 +13,10 @@ const ORDER: { [K in CollectionName]: (a: Row<K>, b: Row<K>) => number } = {
   foods: (a, b) => a.name.localeCompare(b.name),
   food_logs: (a, b) => b.eaten_at.localeCompare(a.eaten_at),
   measurements: (a, b) => b.measured_at.localeCompare(a.measured_at),
+  bible_reads: (a, b) => b.read_at.localeCompare(a.read_at),
+  memory_verses: (a, b) => b.added_at.localeCompare(a.added_at),
+  reading_books: (a, b) => b.started_at.localeCompare(a.started_at),
+  book_reads: (a, b) => b.read_at.localeCompare(a.read_at),
 };
 
 const sorted = <K extends CollectionName>(c: K, rows: Row<K>[]) => [...rows].sort(ORDER[c] as (a: Row<K>, b: Row<K>) => number);
@@ -23,14 +27,23 @@ export function useData(store: DataStore) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Collections whose database tables don't exist yet (run the newest SQL in supabase/schema.sql). */
+  const [missing, setMissing] = useState<CollectionName[]>([]);
 
   const reload = useCallback(async () => {
     try {
-      const lists = await Promise.all(COLLECTIONS.map((c) => store.list(c)));
+      const results = await Promise.allSettled(COLLECTIONS.map((c) => store.list(c)));
       const next = { ...EMPTY } as Record<CollectionName, unknown[]>;
-      COLLECTIONS.forEach((c, i) => (next[c] = sorted(c, lists[i] as never)));
+      const missing: CollectionName[] = [];
+      COLLECTIONS.forEach((c, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled") next[c] = sorted(c, r.value as never);
+        else if (OPTIONAL.includes(c)) missing.push(c);
+        else throw r.reason;
+      });
       setState(next as State);
       setSettings(await store.loadSettings());
+      setMissing(missing);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -60,6 +73,7 @@ export function useData(store: DataStore) {
     settings,
     loading,
     error,
+    missing,
     mode: store.mode,
     clearError: () => setError(null),
     reload,

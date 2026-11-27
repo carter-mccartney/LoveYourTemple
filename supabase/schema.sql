@@ -306,6 +306,81 @@ create policy "own only" on public.reminders for all using (user_id = auth.uid()
 drop policy if exists "own devices" on public.push_subscriptions;
 create policy "own devices" on public.push_subscriptions for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+-- ---------- Bible reading, memory verses, other books ----------
+-- Private to you for now (no crew sharing). Safe to re-run.
+create table if not exists public.bible_reads (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  read_at timestamptz not null default now(),
+  book smallint not null check (book between 1 and 66),
+  chapter smallint not null,
+  verse smallint,
+  end_chapter smallint not null,
+  end_verse smallint,
+  minutes int,
+  kind text not null default 'read',
+  track text,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists bible_reads_user on public.bible_reads (user_id, read_at desc);
+
+create table if not exists public.memory_verses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  book smallint not null,
+  chapter smallint not null,
+  verse smallint not null,
+  end_verse smallint,
+  version text not null,
+  text text not null,
+  added_at timestamptz not null default now(),
+  box smallint not null default 0,
+  due date not null default current_date,
+  reviews int not null default 0,
+  correct int not null default 0,
+  last_result text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.reading_books (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null,
+  author text not null default '',
+  total int not null,
+  unit text not null default 'pages',
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.book_reads (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  book_id uuid not null references public.reading_books(id) on delete cascade,
+  read_at timestamptz not null default now(),
+  position int not null,
+  minutes int,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+alter table public.bible_reads enable row level security;
+alter table public.memory_verses enable row level security;
+alter table public.reading_books enable row level security;
+alter table public.book_reads enable row level security;
+drop policy if exists "own only" on public.bible_reads;
+create policy "own only" on public.bible_reads for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "own only" on public.memory_verses;
+create policy "own only" on public.memory_verses for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "own only" on public.reading_books;
+create policy "own only" on public.reading_books for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "own only" on public.book_reads;
+create policy "own only" on public.book_reads for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update, delete on public.bible_reads, public.memory_verses, public.reading_books, public.book_reads to authenticated;
+
 -- ---------- Table access for signed-in users ----------
 -- Newer Supabase projects don't expose SQL-created tables to the API automatically.
 -- Signed-in users ("authenticated") get table access; the policies above still decide

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { cloudStore, localStore, type DataStore } from "./lib/store";
@@ -17,6 +17,8 @@ import { FoodApp } from "./apps/food/FoodApp";
 import { CrewApp } from "./apps/crew/CrewApp";
 import { SettingsView } from "./apps/settings/SettingsView";
 import { BodyApp } from "./apps/body/BodyApp";
+// Loaded only when opened (question bank, charts) to keep startup fast.
+const BibleApp = lazy(() => import("./apps/bible/BibleApp").then((m) => ({ default: m.BibleApp })));
 
 const APPS = [
   { id: "home", label: "Home", icon: "M4 11l8-7 8 7v9h-5v-6H9v6H4z" },
@@ -24,6 +26,7 @@ const APPS = [
   { id: "workouts", label: "Workouts", icon: "M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" },
   { id: "food", label: "Food", icon: "M7 3v8a3 3 0 0 0 3 3v7M7 3v5M10 3v5M17 3c-2 2-2 7 0 9v9" },
   { id: "body", label: "Body", icon: "M12 3a2 2 0 1 0 0 .01M7 8h10M12 8v6M9 21l3-7 3 7" },
+  { id: "bible", label: "Bible", icon: "M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h9M11 7v5M9 9h4" },
 ] as const;
 const CREW_ICON = "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 20a6 6 0 0 1 12 0M16 5a3 3 0 0 1 0 6M18 20a6 6 0 0 0-3-5";
 /** Screens reachable from the top bar rather than the main tabs. */
@@ -268,6 +271,11 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
             {app === "food" && <FoodApp data={data} route={route} toast={setToast} />}
             {app === "crew" && <CrewApp data={data} userId={userId} memberId={route[1]} toast={setToast} />}
             {app === "body" && <BodyApp data={data} toast={setToast} />}
+            {app === "bible" && (
+              <Suspense fallback={<p className="center muted">Loading…</p>}>
+                <BibleApp data={data} path={route.slice(1)} toast={setToast} />
+              </Suspense>
+            )}
             {app === "settings" && <SettingsView data={data} email={email} onImportExcel={excelHistory && importExcel} toast={setToast} />}
             {!APPS.some((a) => a.id === app) && !EXTRA.includes(app) && (
               <p className="center muted">

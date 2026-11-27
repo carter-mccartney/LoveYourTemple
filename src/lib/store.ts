@@ -14,7 +14,10 @@ export interface DataStore {
   clearAll(): Promise<void>;
 }
 
-export const COLLECTIONS: CollectionName[] = ["sets", "goals", "workouts", "foods", "food_logs", "measurements"];
+export const COLLECTIONS: CollectionName[] = ["sets", "goals", "workouts", "foods", "food_logs", "measurements", "bible_reads", "memory_verses", "reading_books", "book_reads"];
+
+/** Added after launch: if their tables aren't in the database yet, the rest of the app still loads. */
+export const OPTIONAL: CollectionName[] = ["bible_reads", "memory_verses", "reading_books", "book_reads"];
 
 /** Merge stored settings over defaults, one level deep for nested groups. */
 export const withDefaults = (s: Partial<Settings> | null | undefined): Settings => ({
@@ -22,6 +25,7 @@ export const withDefaults = (s: Partial<Settings> | null | undefined): Settings 
   ...(s ?? {}),
   nutrition: { ...DEFAULT_SETTINGS.nutrition, ...(s?.nutrition ?? {}) },
   packed: { ...DEFAULT_SETTINGS.packed, ...(s?.packed ?? {}) },
+  bible: { ...DEFAULT_SETTINGS.bible, ...(s?.bible ?? {}) },
 });
 
 const uid = () => crypto.randomUUID();
@@ -87,6 +91,10 @@ const TABLE: Record<CollectionName, string> = {
   foods: "foods",
   food_logs: "food_logs",
   measurements: "measurements",
+  bible_reads: "bible_reads",
+  memory_verses: "memory_verses",
+  reading_books: "reading_books",
+  book_reads: "book_reads",
 };
 
 function must<T>(res: { data: T | null; error: { message: string } | null }): T {
@@ -135,7 +143,10 @@ export function cloudStore(userId: string): DataStore {
       must(await db.from("profiles").upsert({ id: userId, settings: s, display_name: s.displayName || null }));
     },
     async clearAll() {
-      for (const c of COLLECTIONS) must(await db.from(TABLE[c]).delete().eq("user_id", userId));
+      for (const c of COLLECTIONS) {
+        const res = await db.from(TABLE[c]).delete().eq("user_id", userId);
+        if (res.error && !OPTIONAL.includes(c)) throw new Error(res.error.message);
+      }
     },
   };
 }

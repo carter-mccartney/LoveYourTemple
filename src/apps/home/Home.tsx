@@ -11,6 +11,8 @@ import { RestTimerCard, logHabitSet, useNow } from "../pushups/Today";
 import { KindIcon, StartButtons } from "../workouts/WorkoutsApp";
 import { MacroBar } from "../food/FoodToday";
 import { earliest, fieldOf, fmtBody, latest, toDisplay } from "../../lib/body";
+import { dailyGoal, dayTotals, streak } from "../../lib/bible/progress";
+import { fmtChapters } from "../bible/shared";
 
 export function Home({ data, toast, cloud }: { data: Data; toast: (t: Toast) => void; cloud: boolean }) {
   const { settings } = data;
@@ -106,6 +108,8 @@ export function Home({ data, toast, cloud }: { data: Data; toast: (t: Toast) => 
 
         <BodyTile data={data} />
 
+        <BibleTile data={data} />
+
         <section className="card tile">
           <a className="tile-head" href="#/crew">
             <span>Crew</span>
@@ -162,6 +166,35 @@ function BodyTile({ data }: { data: Data }) {
         <p className="muted small">Log weight and tape measurements (belly, chest, arms, legs) to see your body change over time.</p>
       )}
       <button className="btn" onClick={() => go("body")}>{w || belly ? "Log measurements" : "Start a baseline"}</button>
+    </section>
+  );
+}
+
+function BibleTile({ data }: { data: Data }) {
+  const goal = dailyGoal(data.settings.bible.tracks);
+  const done = dayTotals(data.bible_reads, dayKey(new Date())).total;
+  const days = streak(data.bible_reads, data.settings);
+  const due = data.memory_verses.filter((v) => v.due <= dayKey(new Date())).length;
+  return (
+    <section className="card tile">
+      <a className="tile-head" href="#/bible">
+        <span>Bible</span>
+        <span className="chev">›</span>
+      </a>
+      <div className="hero">
+        {fmtChapters(done)}
+        {goal > 0 && <span className="of"> / {goal} chapters</span>}
+      </div>
+      {goal > 0 && (
+        <div className={`bar ${done >= goal - 0.01 ? "met" : ""}`}>
+          <div style={{ width: `${Math.min(1, done / goal) * 100}%` }} />
+        </div>
+      )}
+      <p className="muted small" style={{ margin: 0 }}>
+        {days ? `${days}-day streak` : "Start a streak today"}
+        {due ? ` · ${due} memory verse${due === 1 ? "" : "s"} to review` : ""}
+      </p>
+      <button className="btn" onClick={() => go("bible")}>{done ? "Log more" : "Log today's reading"}</button>
     </section>
   );
 }

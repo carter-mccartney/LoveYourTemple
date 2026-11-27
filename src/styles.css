@@ -109,7 +109,7 @@ kbd { font-size: 0.8em; border: 1px solid var(--border); border-bottom-width: 2p
 
 .tabs-bottom {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   background: var(--surface); border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
 }

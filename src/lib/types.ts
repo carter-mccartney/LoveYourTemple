@@ -143,6 +143,83 @@ export interface Measurement {
 
 export type NewMeasurement = Omit<Measurement, "id">;
 
+// ---------- Bible & books ----------
+
+export type ReadKind = "read" | "study" | "listen";
+
+/** One reading session: a passage (whole chapters when verse is null). Book is 1 (Genesis) … 66 (Revelation). */
+export interface BibleRead {
+  id: string;
+  read_at: string;
+  book: number;
+  chapter: number;
+  verse: number | null;
+  end_chapter: number;
+  end_verse: number | null;
+  minutes: number | null;
+  kind: ReadKind;
+  /** Which daily-goal track this counts toward (see Settings.bible.tracks), if any. */
+  track: string | null;
+  notes: string;
+}
+export type NewBibleRead = Omit<BibleRead, "id">;
+
+/** A verse (or short passage) you're memorizing, with its spaced-review state. */
+export interface MemoryVerse {
+  id: string;
+  book: number;
+  chapter: number;
+  verse: number;
+  end_verse: number | null;
+  version: string; // "KJV", "ESV", …
+  text: string;
+  added_at: string;
+  /** Review box 0–6; higher = longer until the next review. */
+  box: number;
+  due: string; // YYYY-MM-DD
+  reviews: number;
+  correct: number;
+  last_result: "right" | "close" | "wrong" | null;
+}
+export type NewMemoryVerse = Omit<MemoryVerse, "id">;
+
+/** Any other book you're reading. */
+export interface ReadingBook {
+  id: string;
+  title: string;
+  author: string;
+  total: number; // pages (or chapters)
+  unit: "pages" | "chapters";
+  started_at: string;
+  finished_at: string | null;
+  notes: string;
+}
+export type NewReadingBook = Omit<ReadingBook, "id">;
+
+/** A reading session in one of those books: where you got to. */
+export interface BookRead {
+  id: string;
+  book_id: string;
+  read_at: string;
+  position: number; // page/chapter reached
+  minutes: number | null;
+  notes: string;
+}
+export type NewBookRead = Omit<BookRead, "id">;
+
+export interface BibleTrack {
+  id: string;
+  name: string;
+  chaptersPerDay: number;
+}
+
+/** Your own quiz card, e.g. a quote you want to be tested on. */
+export interface CustomCard {
+  q: string;
+  a: string;
+  note?: string;
+}
+
 // ---------- Settings ----------
 
 export interface Settings {
@@ -182,6 +259,20 @@ export interface Settings {
   };
   /** Foods you brought today, shown as one-tap buttons. */
   packed: { date: string; foodIds: string[] };
+
+  bible: {
+    /** Daily reading goals, e.g. 2 chapters in one book + 1 in another. */
+    tracks: BibleTrack[];
+    /** Group Hebrews with Paul's letters (its author isn't named in the text). */
+    hebrewsWithPaul: boolean;
+    /** Version for reading and quizzes. */
+    version: string;
+    /** Progress views count from this date ("" = start of this year). */
+    since: string;
+    /** Days of the week the reading goal applies (0 = Sunday). */
+    days: number[];
+    customCards: CustomCard[];
+  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -215,6 +306,17 @@ export const DEFAULT_SETTINGS: Settings = {
   remindAgainTimes: 2,
   nutrition: { kcal: null, proteinMin: 150, carbsMax: null, sugarMax: 50, addedSugarMax: 25 },
   packed: { date: "", foodIds: [] },
+  bible: {
+    tracks: [
+      { id: "a", name: "Main reading", chaptersPerDay: 2 },
+      { id: "b", name: "Second book", chaptersPerDay: 1 },
+    ],
+    hebrewsWithPaul: true,
+    version: "KJV",
+    since: "",
+    days: [0, 1, 2, 3, 4, 5, 6],
+    customCards: [],
+  },
 };
 
 // ---------- Store ----------
@@ -226,6 +328,10 @@ export interface Collections {
   foods: Food;
   food_logs: FoodLog;
   measurements: Measurement;
+  bible_reads: BibleRead;
+  memory_verses: MemoryVerse;
+  reading_books: ReadingBook;
+  book_reads: BookRead;
 }
 
 export type CollectionName = keyof Collections;

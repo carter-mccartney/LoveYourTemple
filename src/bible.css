@@ -1,0 +1,157 @@
+/* ---------- Bible ---------- */
+/* Progress tiers: red untouched → orange started → yellow half → pale green 80–99% → green complete. */
+:root {
+  --t0: #eca7a0;
+  --t1: #f2a65a;
+  --t2: #f3d45f;
+  --t3: #b5e3c0;
+  --t4: #2e9e57;
+  --t-ink: #1d1d1b;
+  --t4-ink: #ffffff;
+  --close: #c9a227;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --t0: #7d3a34;
+    --t1: #b8702a;
+    --t2: #b8992c;
+    --t3: #5f9e70;
+    --t4: #36c46b;
+    --t-ink: #ffffff;
+    --t4-ink: #0d1f13;
+    --close: #d9b440;
+  }
+}
+:root[data-theme="dark"] {
+  --t0: #7d3a34;
+  --t1: #b8702a;
+  --t2: #b8992c;
+  --t3: #5f9e70;
+  --t4: #36c46b;
+  --t-ink: #ffffff;
+  --t4-ink: #0d1f13;
+  --close: #d9b440;
+}
+.t0 { background: var(--t0); }
+.t1 { background: var(--t1); }
+.t2 { background: var(--t2); }
+.t3 { background: var(--t3); }
+.t4 { background: var(--t4); }
+
+.tier-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.75rem; color: var(--text-2); }
+.tier-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.tier-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.crumbs { font-size: 0.9rem; color: var(--text-2); }
+.crumbs a { color: var(--accent); text-decoration: none; }
+.right { text-align: right; }
+.warn-card { background: var(--warn-soft); margin-bottom: 14px; font-size: 0.9rem; }
+.pill {
+  display: inline-block; font-size: 0.72rem; padding: 1px 7px; border-radius: 99px; background: var(--surface-2);
+  color: var(--text-2); margin-left: 6px; vertical-align: 1px; text-transform: capitalize;
+}
+.good-text { color: var(--good); }
+
+.track { padding: 10px 12px; background: var(--surface-2); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.read-list { display: flex; flex-direction: column; }
+.read-row {
+  display: flex; gap: 10px; align-items: baseline; text-align: left; padding: 9px 4px; border: 0;
+  border-bottom: 1px solid var(--border); background: none; cursor: pointer; color: var(--text); width: 100%;
+}
+.read-row:last-child { border-bottom: 0; }
+.read-row:hover { background: var(--surface-2); }
+.read-time { font-size: 0.8rem; color: var(--muted); min-width: 64px; font-variant-numeric: tabular-nums; }
+.read-notes { display: block; font-size: 0.85rem; color: var(--text-2); margin-top: 2px; white-space: pre-wrap; }
+.day-group { margin-top: 10px; }
+.note-line { font-size: 0.9rem; white-space: pre-wrap; margin: 4px 0; }
+
+/* Whole-Bible bar, split by section (width = share of the Bible's verses) */
+.section-bar { display: flex; gap: 3px; height: 34px; margin: 6px 0 12px; }
+.section-seg { position: relative; flex-basis: 0; background: var(--surface-2); border-radius: 6px; overflow: hidden; min-width: 6px; }
+.section-seg:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+.section-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px 4px 0 0; }
+.section-list { display: flex; flex-direction: column; }
+.section-row {
+  display: flex; gap: 10px; align-items: center; padding: 7px 4px; border-bottom: 1px solid var(--border);
+  color: var(--text); text-decoration: none; font-size: 0.92rem;
+}
+.section-row:last-child { border-bottom: 0; }
+.section-row:hover { background: var(--surface-2); }
+.section-row i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.section-row .pct { min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Bible map: every chapter as a small square */
+.map-testament { margin-top: 14px; }
+.map-section { margin: 8px 0 12px; }
+.map-section-name { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text); text-decoration: none; margin-bottom: 4px; }
+.map-books { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.map-book { display: inline-flex; flex-direction: column; gap: 3px; text-decoration: none; color: var(--text-2); padding: 3px; border-radius: 6px; max-width: 100%; }
+.map-book:hover { background: var(--surface-2); color: var(--text); }
+.map-book-name { font-size: 0.7rem; }
+.map-cells { display: flex; flex-wrap: wrap; gap: 2px; max-width: 220px; }
+.map-cells i { width: 9px; height: 9px; border-radius: 2px; }
+
+/* Section view: book tiles */
+.book-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.book-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 12px; text-decoration: none; color: var(--t-ink); border: 1px solid transparent; }
+.book-tile.t4 { color: var(--t4-ink); }
+.book-tile:hover { border-color: var(--accent); }
+.book-tile-name { font-weight: 700; }
+.book-tile-pct { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.book-tile-sub { font-size: 0.75rem; opacity: 0.85; }
+.book-strip { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 6px; }
+.book-strip i { width: 7px; height: 7px; border-radius: 2px; outline: 1px solid rgb(0 0 0 / 0.12); }
+
+/* Book view: chapters and verses */
+.chapter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.chapter-cell {
+  position: relative; height: 44px; border: 2px solid transparent; border-radius: 8px; cursor: pointer;
+  font-weight: 700; color: var(--t-ink); font-variant-numeric: tabular-nums;
+}
+.chapter-cell.t4 { color: var(--t4-ink); }
+.chapter-cell.on { border-color: var(--accent); }
+.chapter-cell sup { position: absolute; top: 2px; right: 4px; font-size: 0.62rem; font-weight: 600; }
+.chapter-detail { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.verse-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 4px; margin-top: 10px; }
+.verse-cell { height: 28px; border-radius: 6px; display: grid; place-items: center; font-size: 0.72rem; color: var(--t-ink); font-variant-numeric: tabular-nums; }
+.verse-cell.read { background: var(--t4); color: var(--t4-ink); }
+.passage { margin-top: 12px; }
+.passage-text { line-height: 1.75; margin-top: 10px; }
+.passage-text sup { font-size: 0.65rem; color: var(--muted); margin-right: 2px; }
+.passage-text .was-read { background: color-mix(in srgb, var(--t3) 35%, transparent); border-radius: 3px; }
+
+/* Memorize */
+.verse-deck { display: flex; flex-direction: column; }
+.verse-item { border-bottom: 1px solid var(--border); }
+.verse-item:last-child { border-bottom: 0; }
+.verse-item-head { display: flex; gap: 10px; align-items: center; width: 100%; padding: 10px 2px; background: none; border: 0; cursor: pointer; color: var(--text); text-align: left; }
+.verse-item-body { padding: 0 2px 12px; }
+.verse-quote {
+  font-family: Georgia, "Times New Roman", serif; font-size: 1.08rem; line-height: 1.6; margin: 10px 0; padding: 10px 14px;
+  border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 10px 10px 0;
+}
+.boxes { display: inline-flex; gap: 3px; }
+.boxes i { width: 8px; height: 8px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); }
+.boxes i.on { background: var(--good); border-color: var(--good); }
+.verse-input { font-family: Georgia, "Times New Roman", serif; font-size: 1.05rem; line-height: 1.5; margin-top: 10px; }
+.g-right { border-color: var(--good) !important; background: var(--good-soft) !important; }
+.g-close { border-color: var(--close) !important; background: var(--warn-soft) !important; }
+.g-wrong { border-color: var(--bad) !important; background: var(--bad-soft) !important; }
+.grade { font-weight: 600; margin: 10px 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); }
+.diff { line-height: 1.8; }
+.w-ok { color: var(--text); }
+.w-typo { background: var(--warn-soft); border-bottom: 2px solid var(--close); }
+.w-missing { color: var(--bad); text-decoration: underline wavy; }
+.w-extra { color: var(--muted); text-decoration: line-through; }
+
+/* Challenge */
+.quiz-card { min-height: 260px; }
+.quiz-q { font-size: 1.25rem; margin-top: 4px; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; }
+.choice { text-align: left; min-height: 48px; }
+.answer { margin-top: 10px; }
+
+/* Narrow screens: the Memorize mode switcher scrolls instead of squeezing. */
+.seg.scroll { display: flex; overflow-x: auto; max-width: 100%; }
+.seg.scroll button { white-space: nowrap; flex: none; }
