@@ -422,6 +422,25 @@ alter table public.reminders
   add column if not exists announce boolean not null default false,
   add column if not exists from_endpoint text;
 alter table public.push_subscriptions add column if not exists timer_start boolean not null default false;
+-- Timer notifications: changes made on another device, and the countdown ("10 min left").
+alter table public.push_subscriptions
+  add column if not exists timer_updates boolean not null default false,
+  add column if not exists timer_countdown boolean not null default false;
+alter table public.reminders add column if not exists countdown_last int;
+create table if not exists public.timer_events (
+  id bigint generated always as identity primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  kind text not null check (kind in ('start', 'add', 'stop')),
+  due_at timestamptz,
+  minutes numeric,
+  from_endpoint text,
+  created_at timestamptz not null default now()
+);
+alter table public.timer_events enable row level security;
+drop policy if exists "add own" on public.timer_events;
+create policy "add own" on public.timer_events for insert with check (user_id = auth.uid());
+grant insert on public.timer_events to authenticated;
+grant select, insert, update, delete on public.timer_events to service_role;
 
 -- ---------- Bible Challenge answers (your history on all your devices) ----------
 create table if not exists public.quiz_answers (

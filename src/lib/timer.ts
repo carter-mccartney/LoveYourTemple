@@ -73,8 +73,7 @@ async function myEndpoint(): Promise<string | null> {
   }
 }
 
-/** `announce`: a new timer — tell your iPhone (see "timer started" in send-reminders). */
-async function syncRemote(t: RestTimer | null, announce = false) {
+async function syncRemote(t: RestTimer | null) {
   if (!supabase || !remoteUser) return;
   try {
     if (!t) {
@@ -95,16 +94,32 @@ async function syncRemote(t: RestTimer | null, announce = false) {
     };
     // Older databases lack newer columns: drop them one step at a time so the reminder still saves.
     const timed = { ...full, started_at };
-    // Only a new timer sets the "tell my iPhone" flag. A snooze leaves it alone, so snoozing right
-    // after starting doesn't cancel the announcement before send-reminders gets to it.
-    const rows = announce ? [{ ...timed, announce: true, from_endpoint: await myEndpoint() }, timed, full, base] : [timed, full, base];
-    for (const row of rows) {
+    // countdown_last: which "N min left" notification went out last; a new due time starts over.
+    for (const row of [{ ...timed, countdown_last: null }, timed, full, base]) {
       const { error } = await supabase.from("reminders").upsert(row);
       if (!error) break;
       console.warn("Rest timer: saving with", Object.keys(row).length, "columns failed:", error.message);
     }
   } catch {
     /* in-app alert still works */
+  }
+}
+
+/**
+ * Tell your other devices what just happened (send-reminders turns it into a notification:
+ * "Rest timer started · 30 min", "+5 min", "stopped"). Skipped quietly on older databases.
+ */
+async function sendEvent(kind: "start" | "add" | "stop", t?: RestTimer, minutes?: number) {
+  if (!supabase || !remoteUser) return;
+  try {
+    await supabase.from("timer_events").insert({
+      kind,
+      due_at: t ? new Date(t.dueAt).toISOString() : null,
+      minutes: minutes ?? null,
+      from_endpoint: await myEndpoint(),
+    });
+  } catch {
+    /* optional */
   }
 }
 
@@ -162,7 +177,7 @@ export function startTimer(minutes: number, body: string, next?: { exercise: str
   const t: RestTimer = { startedAt: now, dueAt: now + minutes * 60000, body, fired: false, ...next };
   set(t);
   setPhoneRanFor(now); // started here: this device decides about its own Clock timer
-  syncRemote(t, true);
+  syncRemote(t).then(() => sendEvent("start", t, minutes));
 }
 
 export function addMinutes(minutes: number) {
@@ -170,13 +185,16 @@ export function addMinutes(minutes: number) {
   lastLocalChange = Date.now();
   const t = { ...state, dueAt: Math.max(Date.now(), state.dueAt) + minutes * 60000, fired: false };
   set(t);
-  syncRemote(t);
+  syncRemote(t).then(() => sendEvent("add", t, minutes));
 }
 
 export function stopTimer() {
   lastLocalChange = Date.now();
+  const had = state && !state.fired;
   set(null);
-  syncRemote(null);
+  syncRemote(null).then(() => {
+    if (had) sendEvent("stop");
+  });
 }
 
 export function markFired() {
@@ -193,7 +211,7 @@ export async function showTimerNotification(title: string, body: string, reps?: 
     tag: "lyt-timer",
     renotify: true,
     requireInteraction: true,
-    vibrate: [300, 150, 300, 150, 600],
+    vibrate: [1000, 200, 1000, 200, 1500],
     data: { url: "#/pushups" },
     actions: [
       { action: "log", title: reps ? `Log ${reps}` : "Log set" },
@@ -297,10 +315,7 @@ export function autoPhoneTimer() {
   return startPhoneTimer();
 }
 
-/**
- * Save the iPhone options, and tell the server whether this device wants a push when a
- * timer starts on another device (only devices with a Shortcut set up get one).
- */
+/** Save the iPhone option and tell the server (see syncPhoneAlerts). */
 export async function setPhoneAuto(on: boolean) {
   try {
     localStorage.setItem(AUTO_KEY, on ? "1" : "0");
@@ -309,12 +324,45 @@ export async function setPhoneAuto(on: boolean) {
   }
   await syncPhoneAlerts();
 }
-export async function syncPhoneAlerts() {
-  if (!supabase || !remoteUser) return;
+
+// Timer notifications on this device (cloud mode): changes made on your other devices, and a
+// countdown — every 10 minutes, then 5, 3 and 1 minute left.
+export interface TimerPushPrefs {
+  updates: boolean;
+  countdown: boolean;
+}
+const PUSH_KEY = "lyt.timerPush";
+export const getTimerPush = (): TimerPushPrefs => {
+  try {
+    return { updates: false, countdown: false, ...JSON.parse(localStorage.getItem(PUSH_KEY) ?? "{}") };
+  } catch {
+    return { updates: false, countdown: false };
+  }
+};
+export async function setTimerPush(p: TimerPushPrefs) {
+  try {
+    localStorage.setItem(PUSH_KEY, JSON.stringify(p));
+  } catch {
+    /* ignore */
+  }
+  return syncPhoneAlerts();
+}
+
+/**
+ * Tell the server which timer notifications this device wants: "timer started" with a tap to
+ * start the Clock timer (iPhone Shortcut set up), changes from other devices, the countdown.
+ * Returns false if this device isn't registered for push yet.
+ */
+export async function syncPhoneAlerts(): Promise<boolean> {
+  if (!supabase || !remoteUser) return false;
   const endpoint = await myEndpoint();
-  if (!endpoint) return;
-  await supabase
+  if (!endpoint) return false;
+  const p = getTimerPush();
+  const timer_start = !!getPhoneShortcut() && getPhoneAuto();
+  const { error } = await supabase
     .from("push_subscriptions")
-    .update({ timer_start: !!getPhoneShortcut() && getPhoneAuto() })
+    .update({ timer_start, timer_updates: p.updates, timer_countdown: p.countdown })
     .eq("endpoint", endpoint);
+  if (error) await supabase.from("push_subscriptions").update({ timer_start }).eq("endpoint", endpoint); // older database
+  return true;
 }

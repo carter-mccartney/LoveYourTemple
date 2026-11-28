@@ -29,6 +29,7 @@ self.addEventListener("fetch", (e) => {
 
 // Sent by the Edge Functions:
 //   notify-crew:    { title, body, url: "#/crew/<id>" }
+//   send-reminders, timer status and countdown: { title, body, url, tag: "lyt-timer-status" }
 //   send-reminders: { title, body, url: "#/pushups", tag: "lyt-timer", timer: true, repeat: 0, reps: 40 }
 self.addEventListener("push", (e) => {
   let msg = { title: "LoveYourTemple", body: "", url: "#/crew" };
@@ -39,14 +40,20 @@ self.addEventListener("push", (e) => {
   }
   const opts = { body: msg.body, icon: "icon.svg", badge: "icon.svg", tag: msg.tag, data: { url: msg.url } };
   if (!msg.timer) {
+    if (msg.tag) opts.renotify = true; // timer status: replaces the last one, and still alerts
     e.waitUntil(self.registration.showNotification(msg.title, opts));
     return;
   }
   e.waitUntil(
-    self.registration.getNotifications({ tag: "lyt-timer" }).then((open) => {
+    Promise.all([
+      self.registration.getNotifications({ tag: "lyt-timer" }),
+      // The countdown ("3 min left") is done once the rest is over.
+      self.registration.getNotifications({ tag: "lyt-timer-status" }).then((ns) => ns.forEach((n) => n.close())),
+    ]).then(([open]) => {
       Object.assign(opts, {
         requireInteraction: true,
-        vibrate: [300, 150, 300, 150, 600],
+        // About 4 seconds where the device allows it (Android); iPhone uses its own alert.
+        vibrate: [1000, 200, 1000, 200, 1500],
         actions: [
           { action: "log", title: msg.reps ? `Log ${msg.reps}` : "Log set" },
           { action: "snooze", title: "Snooze 5 min" },

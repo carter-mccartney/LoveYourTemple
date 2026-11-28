@@ -201,7 +201,7 @@ function Shell({ userId, email }: { userId?: string; email?: string }) {
       const reps = timer.reps ?? nextReps(data, ex);
       if (alarmSeconds <= 0) chime();
       else if (!alarmPlannedFor(timer.dueAt)) scheduleAlarm(Date.now(), alarmSeconds); // computer was asleep, or sound wasn't unlocked yet
-      navigator.vibrate?.([300, 150, 300, 150, 600]);
+      navigator.vibrate?.([1000, 200, 1000, 200, 1500]);
       setToastState({ msg: `Time for ${reps} ${ex}`, action: { label: `Log ${reps}`, run: () => timerAction("log") } });
       showTimerNotification(`Time for ${ex}`, timer.body, reps);
     };

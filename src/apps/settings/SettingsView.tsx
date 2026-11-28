@@ -7,7 +7,7 @@ import { csvToSets, download, setsToCsv } from "../../lib/csv";
 import { supabase } from "../../lib/supabase";
 import { getUsdaKey, setUsdaKey } from "../../lib/nutrition";
 import { chime, primeAudio, testAlarm } from "../../lib/alarm";
-import { getPhoneAuto, getPhoneShortcut, setPhoneAuto, setPhoneShortcut, startPhoneTimer, syncPhoneAlerts } from "../../lib/timer";
+import { enableAlerts, getPhoneAuto, getPhoneShortcut, getTimerPush, setPhoneAuto, setPhoneShortcut, setTimerPush, startPhoneTimer, syncPhoneAlerts } from "../../lib/timer";
 import { QuestionSettings } from "../bible/QuestionSettings";
 
 type AnyRow = Record<string, unknown> & { id?: string };
@@ -194,6 +194,7 @@ export function SettingsView({ data, email, onImportExcel, toast }: { data: Data
           The alarm plays while the app is open — even in a background tab or minimized window. Click anywhere in the app to silence it. Repeat
           reminders are push notifications, so they reach your phone with the app closed; they stop as soon as you log a set or snooze.
         </p>
+        {mode === "cloud" && <TimerPush toast={toast} />}
         <PhoneShortcut toast={toast} />
         <table className="table" style={{ marginTop: 12 }}>
           <thead>
@@ -387,6 +388,37 @@ function PasswordBox({ toast }: { toast: (t: Toast) => void }) {
       {err && <p className="error-text">{err}</p>}
       <p className="hint">Optional. With a password you can sign in without waiting for an email. Forgot it? Sign in with an email code and set a new one here.</p>
     </form>
+  );
+}
+
+/** Timer notifications on this device: changes made elsewhere, and a countdown. */
+function TimerPush({ toast }: { toast: (t: Toast) => void }) {
+  const [p, setP] = useState(getTimerPush);
+  const change = async (next: typeof p) => {
+    setP(next);
+    if ((next.updates || next.countdown) && !(await enableAlerts())) {
+      toast({ msg: "Allow notifications for this app first" });
+      return;
+    }
+    if (!(await setTimerPush(next))) toast({ msg: "Couldn't reach the server — try again in a moment" });
+  };
+  return (
+    <div style={{ marginTop: 12 }}>
+      <h3>Timer notifications on this device</h3>
+      <label className="check block">
+        <input type="checkbox" checked={p.updates} onChange={(e) => change({ ...p, updates: e.target.checked })} /> When I start, add time to,
+        restart or stop the timer on another device
+      </label>
+      <label className="check block">
+        <input type="checkbox" checked={p.countdown} onChange={(e) => change({ ...p, countdown: e.target.checked })} /> Countdown: time left every
+        10 minutes, then at 5, 3 and 1 minute
+      </label>
+      <p className="hint">
+        Each one replaces the last, so you see one timer notification, not a pile. Turn these on on your phone and leave them off here if you
+        like. iPhone doesn't let web apps show a live countdown on the Lock Screen or play a long alarm — for a real alarm, use the Clock timer
+        below.
+      </p>
+    </div>
   );
 }
 

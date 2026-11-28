@@ -41,6 +41,8 @@ alter table public.reminders
 
 - [x] Shared rest timer, iPhone "timer started" push, and Bible Challenge answers on all devices (Nov 27): run the block from `-- ---------- Rest timer shared by your devices ----------` through the `quiz_answers` grant in `supabase/schema.sql` (safe to re-run). Then re-deploy `send-reminders` (Edge Functions → send-reminders → Code → paste the new `supabase/functions/send-reminders/index.ts` → Deploy).
 
+- [ ] Timer notifications (Nov 27): run the "Timer notifications" lines (timer_updates/timer_countdown, countdown_last, timer_events) from `supabase/schema.sql`, re-deploy `send-reminders`, and add a Database Webhook: table `timer_events`, event Insert → Edge Function `send-reminders`, header `x-webhook-secret` = WEBHOOK_SECRET (makes changes instant; without it they arrive within a minute). Then on the phone: Settings → Timer notifications on this device.
+
 ## 4. Closed-app notifications
 - [x] Edge Functions → Secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `WEBHOOK_SECRET`, `VAPID_SUBJECT` (= `mailto:` + your Gmail).
 - [x] Edge Functions → Deploy a new function → Via Editor → name `send-reminders` → paste `supabase/functions/send-reminders/index.ts` → Deploy → turn **off** Verify JWT.
